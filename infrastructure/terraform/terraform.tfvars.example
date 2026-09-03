@@ -1,0 +1,21 @@
+# Copia este archivo como terraform.tfvars y ajusta solo lo necesario.
+# Dejar estos IDs en null utiliza el tenant y la suscripción activos de Azure CLI.
+subscription_id = null
+tenant_id       = null
+
+project_name = "rag-manual-generico"
+environment  = "dev"
+location     = "brazilsouth"
+
+key_vault_sku_name            = "standard"
+grant_deployer_secrets_access = true
+
+# Agrega las IP públicas autorizadas como rangos /32 o CIDR corporativos.
+# Con la lista vacía, el plano de datos permanece bloqueado desde Internet.
+allowed_ip_cidrs = [
+  # "203.0.113.10/32",
+]
+
+tags = {
+  Owner = "equipo-rag"
+}

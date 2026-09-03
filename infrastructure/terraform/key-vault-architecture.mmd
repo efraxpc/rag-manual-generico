@@ -1,0 +1,55 @@
+flowchart TB
+  actor["Usuario o CI/CD"]
+  azure_cli["Azure CLI<br/>az login"]
+
+  subgraph terraform["Terraform root module"]
+    provider["Proveedor AzureRM"]
+    client_config["Identidad activa<br/>azurerm_client_config"]
+    variables["Variables<br/>entorno, SKU, CIDR y tags"]
+    naming["Nombres deterministas<br/>proyecto + entorno + hash"]
+    protection["Protección por entorno"]
+    outputs["Outputs<br/>nombre, ID, URI y Resource Group"]
+  end
+
+  subgraph azure["Suscripción de Azure"]
+    resource_group["Resource Group<br/>rg-proyecto-entorno"]
+
+    subgraph vault_boundary["Azure Key Vault"]
+      key_vault["Key Vault<br/>SKU standard o premium"]
+      rbac["RBAC habilitado<br/>Key Vault Secrets Officer"]
+      firewall["Firewall<br/>Deny por defecto"]
+      retention["Soft delete y<br/>purge protection"]
+      empty_content["Sin secretos, claves ni<br/>certificados en Terraform"]
+    end
+  end
+
+  actor -->|"Autenticación local"| azure_cli
+  azure_cli --> provider
+  provider --> client_config
+  variables --> naming
+  variables --> protection
+  provider --> resource_group
+  naming --> resource_group
+  resource_group --> key_vault
+  client_config -->|"Tenant ID"| key_vault
+  client_config -->|"Principal ID"| rbac
+  rbac -->|"Scope del vault"| key_vault
+  variables -->|"allowed_ip_cidrs"| firewall
+  firewall --> key_vault
+  protection -->|"dev/test: 7 días, sin purge"| retention
+  protection -->|"staging/prod: 90 días, con purge"| retention
+  retention --> key_vault
+  empty_content -.-> key_vault
+  key_vault --> outputs
+
+  classDef identity fill:#e8f1ff,stroke:#2563eb,color:#172554
+  classDef terraformNode fill:#f3e8ff,stroke:#7e22ce,color:#3b0764
+  classDef azureResource fill:#e6f7ff,stroke:#0078d4,color:#003b5c
+  classDef security fill:#fff7d6,stroke:#b7791f,color:#5f370e
+  classDef note fill:#f3f4f6,stroke:#6b7280,color:#111827,stroke-dasharray: 5 5
+
+  class actor,azure_cli identity
+  class provider,client_config,variables,naming,protection,outputs terraformNode
+  class resource_group,key_vault azureResource
+  class rbac,firewall,retention security
+  class empty_content note

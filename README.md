@@ -44,5 +44,12 @@ app/
 ├── schemas/         # Modelos Pydantic de entrada y salida
 └── main.py          # Creación de la aplicación
 tests/               # Pruebas automatizadas
+infrastructure/      # Infraestructura como código con Terraform
 ```
 
+## Infraestructura en Azure
+
+La base de Terraform está en `infrastructure/terraform`. Incluye autenticación
+mediante Azure CLI y aprovisionamiento seguro de Azure Key Vault con RBAC.
+Consulta las instrucciones en
+[`infrastructure/terraform/README.md`](infrastructure/terraform/README.md).
