@@ -35,3 +35,28 @@ output "key_vault_uri" {
   description = "URI del plano de datos del Azure Key Vault."
   value       = azurerm_key_vault.main.vault_uri
 }
+
+output "container_registry_login_server" {
+  description = "Servidor del Azure Container Registry que aloja la imagen."
+  value       = data.azurerm_container_registry.main.login_server
+}
+
+output "container_app_environment_id" {
+  description = "ID del Azure Container Apps Environment."
+  value       = azurerm_container_app_environment.main.id
+}
+
+output "container_app_fqdn" {
+  description = "Dominio público de la API."
+  value       = azurerm_container_app.api.ingress[0].fqdn
+}
+
+output "container_app_url" {
+  description = "URL HTTPS pública de la API."
+  value       = "https://${azurerm_container_app.api.ingress[0].fqdn}"
+}
+
+output "container_app_identity_id" {
+  description = "ID de la identidad administrada usada por la aplicación."
+  value       = azurerm_user_assigned_identity.container_app.id
+}

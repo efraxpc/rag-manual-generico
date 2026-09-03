@@ -72,6 +72,100 @@ variable "grant_deployer_secrets_access" {
   default     = true
 }
 
+variable "container_apps_resource_group_name" {
+  description = "Resource Group existente que contiene el ACR y los recursos de Container Apps."
+  type        = string
+  default     = "rg-fastapi-hello"
+}
+
+variable "container_registry_name" {
+  description = "Nombre del Azure Container Registry existente."
+  type        = string
+  default     = "fastapihellowkiksu"
+}
+
+variable "log_analytics_workspace_name" {
+  description = "Nombre del workspace de Log Analytics usado por Container Apps."
+  type        = string
+  default     = "workspace-rgfastapihellovmC5"
+}
+
+variable "container_app_environment_name" {
+  description = "Nombre del Azure Container Apps Environment."
+  type        = string
+  default     = "cae-rag-manual-dev"
+}
+
+variable "container_app_identity_name" {
+  description = "Nombre de la identidad administrada usada para descargar imágenes del ACR."
+  type        = string
+  default     = "id-rag-manual-dev"
+}
+
+variable "container_app_name" {
+  description = "Nombre de la Azure Container App."
+  type        = string
+  default     = "rag-manual-api"
+}
+
+variable "container_image_repository" {
+  description = "Repositorio de la imagen dentro del ACR."
+  type        = string
+  default     = "rag-manual-api"
+}
+
+variable "container_image_tag" {
+  description = "Etiqueta inmutable de la imagen que debe desplegarse."
+  type        = string
+  default     = "ce4ae6b"
+}
+
+variable "container_app_environment" {
+  description = "Valor de APP_ENVIRONMENT dentro del contenedor."
+  type        = string
+  default     = "production"
+}
+
+variable "container_app_target_port" {
+  description = "Puerto HTTP expuesto por el contenedor."
+  type        = number
+  default     = 8000
+
+  validation {
+    condition     = var.container_app_target_port >= 1 && var.container_app_target_port <= 65535
+    error_message = "container_app_target_port debe estar entre 1 y 65535."
+  }
+}
+
+variable "container_app_cpu" {
+  description = "Cantidad de vCPU asignada a cada réplica."
+  type        = number
+  default     = 0.5
+}
+
+variable "container_app_memory" {
+  description = "Memoria asignada a cada réplica."
+  type        = string
+  default     = "1Gi"
+}
+
+variable "container_app_min_replicas" {
+  description = "Número mínimo de réplicas; cero habilita scale-to-zero."
+  type        = number
+  default     = 0
+}
+
+variable "container_app_max_replicas" {
+  description = "Número máximo de réplicas."
+  type        = number
+  default     = 3
+
+  validation {
+    condition     = var.container_app_max_replicas >= var.container_app_min_replicas
+    error_message = "container_app_max_replicas debe ser mayor o igual que container_app_min_replicas."
+  }
+}
+
 variable "tags" {
   description = "Etiquetas adicionales para futuros recursos."
   type        = map(string)

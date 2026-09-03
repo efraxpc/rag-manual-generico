@@ -10,6 +10,23 @@ location     = "brazilsouth"
 key_vault_sku_name            = "standard"
 grant_deployer_secrets_access = true
 
+# Recursos del despliegue existente de Azure Container Apps.
+container_apps_resource_group_name = "rg-fastapi-hello"
+container_registry_name             = "fastapihellowkiksu"
+log_analytics_workspace_name        = "workspace-rgfastapihellovmC5"
+container_app_environment_name      = "cae-rag-manual-dev"
+container_app_identity_name         = "id-rag-manual-dev"
+container_app_name                  = "rag-manual-api"
+container_image_repository          = "rag-manual-api"
+container_image_tag                 = "ce4ae6b"
+
+container_app_environment  = "production"
+container_app_target_port  = 8000
+container_app_cpu          = 0.5
+container_app_memory       = "1Gi"
+container_app_min_replicas = 0
+container_app_max_replicas = 3
+
 # Agrega las IP públicas autorizadas como rangos /32 o CIDR corporativos.
 # Con la lista vacía, el plano de datos permanece bloqueado desde Internet.
 allowed_ip_cidrs = [

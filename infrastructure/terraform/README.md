@@ -1,9 +1,17 @@
-# Terraform para Azure Key Vault
+# Infraestructura Azure con Terraform
 
-Configuración base para autenticar Terraform con Azure y aprovisionar un Key
-Vault por entorno. Crea un Resource Group, un Key Vault protegido por firewall
-y una asignación RBAC para el principal que ejecuta Terraform. No administra
-secretos, claves ni certificados.
+Configuración para autenticar Terraform con Azure y administrar dos grupos de
+recursos:
+
+- Un Resource Group y un Key Vault protegido por firewall y RBAC.
+- La API desplegada en Azure Container Apps dentro del Resource Group
+  preexistente `rg-fastapi-hello` y usando el ACR preexistente
+  `fastapihellowkiksu`.
+
+Terraform no administra el Resource Group de Container Apps, el ACR, sus
+imágenes, secretos, claves ni certificados. Ambos recursos se consultan como
+fuentes de datos para evitar asumir propiedad sobre el AKS y los demás recursos
+que comparten ese grupo.
 
 El flujo completo está representado en
 [`key-vault-architecture.mmd`](key-vault-architecture.mmd).
@@ -13,10 +21,14 @@ El flujo completo está representado en
 - Terraform `>= 1.5.0` y `< 2.0.0`.
 - Azure CLI.
 - Una cuenta con acceso a una suscripción de Azure.
-- Permisos para crear Resource Groups y Key Vaults.
+- El proveedor `Microsoft.App` registrado en la suscripción.
+- Permisos para administrar Resource Groups, Key Vault, Log Analytics,
+  identidades y Container Apps.
 - Rol `Owner` o `User Access Administrator` para crear la asignación RBAC. Si
   los accesos se administran externamente, configura
   `grant_deployer_secrets_access = false`.
+- Un Resource Group y un Azure Container Registry existentes para alojar la
+  aplicación y su imagen.
 
 ## 1. Autenticarse en Azure
 
@@ -37,8 +49,9 @@ cd infrastructure/terraform
 cp terraform.tfvars.example terraform.tfvars
 ```
 
-Edita `terraform.tfvars` y agrega las IP públicas autorizadas. Para un solo
-equipo, utiliza su IP pública con una máscara `/32`:
+Edita `terraform.tfvars`, selecciona una etiqueta inmutable existente en el ACR
+y agrega las IP públicas autorizadas para Key Vault. Para un solo equipo,
+utiliza su IP pública con una máscara `/32`:
 
 ```hcl
 allowed_ip_cidrs = [
@@ -68,12 +81,48 @@ El despliegue crea:
 - Un firewall con denegación predeterminada y los CIDR declarados.
 - El rol `Key Vault Secrets Officer` para el principal que ejecutó Terraform,
   salvo que se desactive mediante una variable.
+- Un workspace de Log Analytics.
+- Un Azure Container Apps Environment con perfil Consumption.
+- Una identidad administrada asignada por el usuario y su rol `AcrPull`.
+- Una Container App con HTTPS público, una sola revisión activa y escalado
+  configurable, incluido scale-to-zero.
+
+La imagen debe existir antes de ejecutar `terraform apply`. Puede construirse y
+publicarse mediante ACR Tasks:
+
+```bash
+az acr build \
+  --registry fastapihellowkiksu \
+  --image rag-manual-api:<tag> \
+  ../..
+```
+
+Actualiza `container_image_tag` con el mismo `<tag>` antes del plan.
+
+## Adoptar el despliegue existente
+
+Los recursos creados inicialmente mediante Azure CLI ya fueron importados al
+estado local de este workspace. Si se parte de otro estado, importa el
+workspace, el entorno y la aplicación antes de ejecutar un plan:
+
+```bash
+terraform import azurerm_log_analytics_workspace.container_apps \
+  <log-analytics-workspace-resource-id>
+terraform import azurerm_container_app_environment.main \
+  <container-app-environment-resource-id>
+terraform import azurerm_container_app.api \
+  <container-app-resource-id>
+```
+
+El segmento del ID de la aplicación debe escribirse como `containerApps`,
+respetando mayúsculas y minúsculas exigidas por AzureRM.
 
 Consulta el resultado con:
 
 ```bash
 terraform output
 az keyvault show --name "$(terraform output -raw key_vault_name)"
+curl "$(terraform output -raw container_app_url)/api/v1/health"
 ```
 
 ## Protección contra borrado
@@ -93,6 +142,7 @@ nombre hasta que finalice el periodo de retención.
 
 ```text
 backend.tf                 # Estado local inicial
+container_app.tf           # Log Analytics, identidad, RBAC y Container Apps
 data.tf                    # Identidad y suscripción activas
 key_vault.tf               # Resource Group, Key Vault y RBAC
 key-vault-architecture.mmd # Diagrama Mermaid de la arquitectura

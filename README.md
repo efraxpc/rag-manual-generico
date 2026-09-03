@@ -50,6 +50,7 @@ infrastructure/      # Infraestructura como código con Terraform
 ## Infraestructura en Azure
 
 La base de Terraform está en `infrastructure/terraform`. Incluye autenticación
-mediante Azure CLI y aprovisionamiento seguro de Azure Key Vault con RBAC.
+mediante Azure CLI, Azure Key Vault con RBAC y el despliegue de la API en Azure
+Container Apps usando una imagen privada de Azure Container Registry.
 Consulta las instrucciones en
 [`infrastructure/terraform/README.md`](infrastructure/terraform/README.md).
