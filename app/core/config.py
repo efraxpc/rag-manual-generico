@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     debug: bool = False
     docs_enabled: bool = True
     api_v1_prefix: str = "/api/v1"
+    api_base_url: str = "http://localhost:8000"
     cors_origins: list[str] = ["http://localhost:3000"]
 
     model_config = SettingsConfigDict(
@@ -23,4 +24,3 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
-
