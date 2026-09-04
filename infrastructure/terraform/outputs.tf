@@ -60,3 +60,18 @@ output "container_app_identity_id" {
   description = "ID de la identidad administrada usada por la aplicación."
   value       = azurerm_user_assigned_identity.container_app.id
 }
+
+output "search_service_id" {
+  description = "ID de Azure AI Search."
+  value       = azurerm_search_service.main.id
+}
+
+output "search_service_name" {
+  description = "Nombre de Azure AI Search."
+  value       = azurerm_search_service.main.name
+}
+
+output "search_service_endpoint" {
+  description = "Endpoint HTTPS de Azure AI Search."
+  value       = azurerm_search_service.main.endpoint
+}

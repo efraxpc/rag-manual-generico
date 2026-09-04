@@ -166,6 +166,39 @@ variable "container_app_max_replicas" {
   }
 }
 
+variable "search_service_name" {
+  description = "Nombre global de Azure AI Search. Si es null, se genera uno estable con la suscripción."
+  type        = string
+  default     = null
+  nullable    = true
+
+  validation {
+    condition = (
+      var.search_service_name == null ||
+      (
+        length(var.search_service_name) >= 2 &&
+        length(var.search_service_name) <= 60 &&
+        can(regex("^[a-z0-9]+(?:-[a-z0-9]+)*$", var.search_service_name))
+      )
+    )
+    error_message = "search_service_name debe tener entre 2 y 60 caracteres, usar minúsculas, números o guiones simples, y no comenzar ni terminar con guion."
+  }
+}
+
+variable "search_service_sku" {
+  description = "SKU de Azure AI Search."
+  type        = string
+  default     = "free"
+
+  validation {
+    condition = contains(
+      ["free", "basic", "standard", "standard2", "standard3", "storage_optimized_l1", "storage_optimized_l2"],
+      var.search_service_sku
+    )
+    error_message = "search_service_sku debe ser un SKU compatible con Azure AI Search."
+  }
+}
+
 variable "tags" {
   description = "Etiquetas adicionales para futuros recursos."
   type        = map(string)

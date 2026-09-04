@@ -19,6 +19,14 @@ locals {
   key_vault_project_prefix     = trim(substr(local.normalized_project_name, 0, min(local.key_vault_project_max_length, length(local.normalized_project_name))), "-")
   key_vault_name               = "kv-${local.key_vault_project_prefix}-${var.environment}-${local.key_vault_hash}"
 
+  # Azure AI Search exige un nombre globalmente único de 2 a 60 caracteres.
+  # Se conserva el hash al final incluso cuando el nombre del proyecto es largo.
+  search_service_hash               = substr(md5(data.azurerm_client_config.current.subscription_id), 0, 8)
+  search_service_project_max_length = 60 - length("srch--${var.environment}-${local.search_service_hash}")
+  search_service_project_prefix     = trim(substr(local.normalized_project_name, 0, min(local.search_service_project_max_length, length(local.normalized_project_name))), "-")
+  search_service_default_name       = "srch-${local.search_service_project_prefix}-${var.environment}-${local.search_service_hash}"
+  search_service_name               = var.search_service_name != null ? var.search_service_name : local.search_service_default_name
+
   protected_environment      = contains(["staging", "prod"], var.environment)
   soft_delete_retention_days = local.protected_environment ? 90 : 7
   purge_protection_enabled   = local.protected_environment

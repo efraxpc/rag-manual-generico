@@ -7,14 +7,18 @@ recursos:
 - La API desplegada en Azure Container Apps dentro del Resource Group
   preexistente `rg-fastapi-hello` y usando el ACR preexistente
   `fastapihellowkiksu`.
+- Un servicio Azure AI Search con autenticación Microsoft Entra ID y acceso
+  RBAC para la identidad administrada de la API.
 
 Terraform no administra el Resource Group de Container Apps, el ACR, sus
 imágenes, secretos, claves ni certificados. Ambos recursos se consultan como
 fuentes de datos para evitar asumir propiedad sobre el AKS y los demás recursos
 que comparten ese grupo.
 
-El flujo completo está representado en
-[`key-vault-architecture.mmd`](key-vault-architecture.mmd).
+Los flujos de infraestructura y seguridad están representados en:
+
+- [`key-vault-architecture.mmd`](key-vault-architecture.mmd).
+- [`azure-ai-search-entra-rbac.mmd`](azure-ai-search-entra-rbac.mmd).
 
 ## Requisitos
 
@@ -22,6 +26,7 @@ El flujo completo está representado en
 - Azure CLI.
 - Una cuenta con acceso a una suscripción de Azure.
 - El proveedor `Microsoft.App` registrado en la suscripción.
+- El proveedor `Microsoft.Search` registrado en la suscripción.
 - Permisos para administrar Resource Groups, Key Vault, Log Analytics,
   identidades y Container Apps.
 - Rol `Owner` o `User Access Administrator` para crear la asignación RBAC. Si
@@ -86,6 +91,8 @@ El despliegue crea:
 - Una identidad administrada asignada por el usuario y su rol `AcrPull`.
 - Una Container App con HTTPS público, una sola revisión activa y escalado
   configurable, incluido scale-to-zero.
+- Un Azure AI Search y el rol `Search Index Data Contributor` para que la API
+  pueda consultar y cargar documentos sin API keys.
 
 La imagen debe existir antes de ejecutar `terraform apply`. Puede construirse y
 publicarse mediante ACR Tasks:
@@ -98,6 +105,21 @@ az acr build \
 ```
 
 Actualiza `container_image_tag` con el mismo `<tag>` antes del plan.
+
+Para desplegar únicamente Azure AI Search sin aplicar los recursos pendientes
+de Key Vault:
+
+```bash
+terraform plan \
+  -target=azurerm_search_service.main \
+  -target=azurerm_role_assignment.container_app_search_data \
+  -out=search.tfplan
+terraform apply search.tfplan
+```
+
+El recurso crea solamente el servicio. Los índices, indexers, skillsets y la
+carga de documentos deben versionarse e implementarse posteriormente mediante
+el SDK o la API REST de Azure AI Search.
 
 ## Adoptar el despliegue existente
 
@@ -142,6 +164,7 @@ nombre hasta que finalice el periodo de retención.
 
 ```text
 backend.tf                 # Estado local inicial
+azure-ai-search-entra-rbac.mmd # Diagrama de Entra ID y RBAC de AI Search
 container_app.tf           # Log Analytics, identidad, RBAC y Container Apps
 data.tf                    # Identidad y suscripción activas
 key_vault.tf               # Resource Group, Key Vault y RBAC
@@ -149,6 +172,7 @@ key-vault-architecture.mmd # Diagrama Mermaid de la arquitectura
 locals.tf                  # Nombres, protección y etiquetas comunes
 outputs.tf                 # Contexto de Azure y datos del Key Vault
 providers.tf               # Configuración del proveedor AzureRM
+search.tf                  # Azure AI Search y acceso de la aplicación
 terraform.tfvars.example   # Ejemplo de valores por entorno
 variables.tf               # Entradas del proyecto
 versions.tf                # Versiones de Terraform y AzureRM

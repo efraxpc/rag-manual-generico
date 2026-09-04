@@ -27,6 +27,10 @@ container_app_memory       = "1Gi"
 container_app_min_replicas = 0
 container_app_max_replicas = 3
 
+# Azure AI Search. null genera un nombre global estable para la suscripción.
+search_service_name = null
+search_service_sku  = "free"
+
 # Agrega las IP públicas autorizadas como rangos /32 o CIDR corporativos.
 # Con la lista vacía, el plano de datos permanece bloqueado desde Internet.
 allowed_ip_cidrs = [
