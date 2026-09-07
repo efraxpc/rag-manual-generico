@@ -7,17 +7,23 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.router import api_router
 from app.core.config import get_settings
 from app.core.exceptions import ApplicationError, application_error_handler
-from app.core.resources import open_vector_store
+from app.core.resources import open_text_store, open_vector_store
 
 
 @asynccontextmanager
 async def lifespan(application: FastAPI) -> AsyncIterator[None]:
-    with open_vector_store(get_settings()) as vector_store:
+    settings = get_settings()
+    with (
+        open_vector_store(settings) as vector_store,
+        open_text_store(settings) as text_store,
+    ):
         application.state.vector_store = vector_store
+        application.state.text_store = text_store
         try:
             yield
         finally:
             application.state.vector_store = None
+            application.state.text_store = None
 
 
 def create_app() -> FastAPI:

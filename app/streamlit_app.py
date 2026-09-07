@@ -7,15 +7,53 @@ from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+import httpx
 import streamlit as st
+from pydantic import ValidationError
 
 from app.core.config import get_settings
+from app.schemas.documents import UploadDocumentResponse
+from app.services.file_ingestion import MAX_UPLOAD_BYTES
 
 SUPPORTED_FILE_TYPES = ["pdf", "txt", "md"]
 
 
 class ApiUnavailableError(RuntimeError):
     """Indica que la interfaz no pudo consultar el estado de la API."""
+
+
+class DocumentUploadError(RuntimeError):
+    """Error de carga que se puede mostrar en la interfaz."""
+
+
+def upload_document(api_url: str, filename: str, data: bytes) -> UploadDocumentResponse:
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise DocumentUploadError("El archivo supera el límite de 10 MiB.")
+    url = f"{api_url.strip().rstrip('/')}/api/v1/documents/upload"
+    try:
+        response = httpx.post(
+            url,
+            files={"file": (filename, data, "application/octet-stream")},
+            timeout=httpx.Timeout(120, connect=5),
+        )
+    except (httpx.HTTPError, httpx.InvalidURL) as exc:
+        raise DocumentUploadError(
+            "No se pudo completar la carga. Puedes reintentar con el mismo archivo."
+        ) from exc
+    try:
+        payload = response.json()
+    except ValueError as exc:
+        raise DocumentUploadError("La API devolvió una respuesta no válida.") from exc
+    if response.is_error:
+        error = payload.get("error", {}) if isinstance(payload, dict) else {}
+        message = error.get("message") if isinstance(error, dict) else None
+        raise DocumentUploadError(
+            message if isinstance(message, str) else "La API rechazó el archivo."
+        )
+    try:
+        return UploadDocumentResponse.model_validate(payload)
+    except ValidationError as exc:
+        raise DocumentUploadError("La API devolvió una respuesta no válida.") from exc
 
 
 def build_health_url(api_url: str) -> str:
@@ -48,7 +86,7 @@ def fetch_api_health(api_url: str) -> dict[str, Any]:
     return payload
 
 
-def render_sidebar() -> Any:
+def render_sidebar() -> tuple[Any, str]:
     """Muestra la configuración y devuelve el manual seleccionado."""
     with st.sidebar:
         st.header("Configuración")
@@ -74,13 +112,35 @@ def render_sidebar() -> Any:
         manual = st.file_uploader(
             "Carga un archivo",
             type=SUPPORTED_FILE_TYPES,
-            help="Formatos admitidos: PDF, TXT y Markdown.",
+            help="PDF con texto, TXT y Markdown. Máximo 10 MiB; sin OCR.",
         )
         if manual is not None:
             size_kb = manual.size / 1024
             st.caption(f"{manual.name} · {size_kb:.1f} KB")
 
-    return manual
+    return manual, api_url
+
+
+def render_document_upload(manual: Any, api_url: str) -> None:
+    """Solo envía archivos al pulsar el botón, nunca durante un rerun."""
+    selection = (api_url.strip().rstrip("/"), manual.name, manual.file_id)
+    if st.session_state.get("upload_selection") != selection:
+        st.session_state["upload_selection"] = selection
+        st.session_state.pop("upload_result", None)
+    if st.button("Procesar y guardar", type="primary"):
+        st.session_state.pop("upload_result", None)
+        with st.spinner("Procesando y guardando fragmentos…"):
+            try:
+                result = upload_document(api_url, manual.name, manual.getvalue())
+            except DocumentUploadError as exc:
+                st.error(str(exc))
+            else:
+                st.session_state["upload_result"] = result.model_dump()
+    result = st.session_state.get("upload_result")
+    if result:
+        st.success(f"Se guardaron {result['indexed_chunks']} fragmentos del archivo.")
+        for warning in result["warnings"]:
+            st.warning(warning)
 
 
 def render_app() -> None:
@@ -91,15 +151,18 @@ def render_app() -> None:
         layout="centered",
     )
 
-    manual = render_sidebar()
+    manual, api_url = render_sidebar()
 
     st.title("📚 RAG Manual")
     st.write("Consulta información de tus manuales desde una interfaz sencilla.")
 
     if manual is None:
+        st.session_state.pop("upload_selection", None)
+        st.session_state.pop("upload_result", None)
         st.info("Carga un manual desde la barra lateral para comenzar.")
     else:
-        st.success(f"Manual **{manual.name}** listo para procesar.")
+        st.write(f"Manual seleccionado: **{manual.name}**")
+        render_document_upload(manual, api_url)
 
     st.subheader("Haz una pregunta")
     with st.form("question_form"):
@@ -122,8 +185,8 @@ def render_app() -> None:
         else:
             st.session_state["last_question"] = question.strip()
             st.info(
-                "La consulta está preparada. Falta conectar el procesamiento "
-                "del documento y el endpoint RAG para generar una respuesta."
+                "La consulta está preparada. La búsqueda sobre estos fragmentos "
+                "y la generación de respuestas todavía están pendientes."
             )
 
     last_question = st.session_state.get("last_question")

@@ -11,3 +11,10 @@ class IndexChunksRequest(BaseModel):
 
 class IndexChunksResponse(BaseModel):
     indexed_chunks: int
+
+
+class UploadDocumentResponse(BaseModel):
+    document_id: str
+    source: str
+    indexed_chunks: int
+    warnings: list[str]

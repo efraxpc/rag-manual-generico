@@ -123,9 +123,11 @@ terraform plan \
 terraform apply search.tfplan
 ```
 
-El recurso crea solamente el servicio. Los índices, indexers, skillsets y la
-carga de documentos deben versionarse e implementarse posteriormente mediante
-el SDK o la API REST de Azure AI Search.
+El recurso crea solamente el servicio. Para preparar el índice textual y cargar
+PDF con texto, TXT y Markdown desde la aplicación, consulta la
+[guía de carga de archivos](../../docs/file-ingestion.md). El comando de preparación
+del índice usa el SDK y se ejecuta por separado de Terraform. Los indexers y
+skillsets no están implementados.
 
 ## Identidad administrada para cargar chunks
 

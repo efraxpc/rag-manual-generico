@@ -20,10 +20,11 @@ Los endpoints son funciones síncronas: FastAPI ejecuta las operaciones del SDK
 en su pool de hilos. Los servicios no importan clases de Azure y las pruebas
 pueden sustituir el almacén por una implementación en memoria.
 
-Este cambio cubre almacenamiento y recuperación de embeddings precalculados.
-La extracción de PDF, el chunking, la generación de embeddings y las respuestas
-de un LLM siguen pendientes. Streamlit conserva su interfaz de preparación de
-consultas; todavía no invoca estos endpoints vectoriales.
+Estos endpoints cubren almacenamiento y recuperación de embeddings precalculados.
+La [carga de archivos](file-ingestion.md) extrae PDF con texto, TXT y Markdown,
+divide su contenido y lo guarda en un índice textual separado, sin embeddings.
+Streamlit conecta esa carga con la API; todavía no invoca los endpoints vectoriales.
+La generación de embeddings y las respuestas de un LLM siguen pendientes.
 
 ## Configuración y autenticación
 
@@ -36,8 +37,10 @@ APP_AZURE_SEARCH_INDEX_NAME="rag-chunks"
 APP_AZURE_SEARCH_VECTOR_DIMENSIONS=3
 ```
 
-Las tres se configuran conjuntamente. Si no se configura ninguna, la API y
-`/api/v1/health` siguen funcionando; las operaciones vectoriales devuelven
+Las tres se configuran conjuntamente para habilitar el almacén vectorial.
+El endpoint también puede usarse solo con `APP_AZURE_SEARCH_TEXT_INDEX_NAME`,
+sin configurar nombre ni dimensiones vectoriales. Si no se configura el almacén
+vectorial, la API y `/api/v1/health` siguen funcionando; sus operaciones devuelven
 `503` con código `vector_store_not_configured`.
 
 Se utiliza `DefaultAzureCredential`, sin claves API. En desarrollo puede usar

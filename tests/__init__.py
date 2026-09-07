@@ -1,2 +1,1 @@
 """Pruebas automatizadas."""
-

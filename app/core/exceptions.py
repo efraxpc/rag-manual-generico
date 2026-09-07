@@ -43,6 +43,17 @@ class ChunkIndexingError(ApplicationError):
         )
 
 
+class TextStoreUnavailableError(ApplicationError):
+    def __init__(self) -> None:
+        super().__init__(
+            "No se pudo acceder al índice de texto. Comprueba su existencia y "
+            "los permisos de Entra ID. Algunos fragmentos pueden haberse guardado; "
+            "puedes reintentar con el mismo archivo.",
+            status_code=503,
+            code="text_store_unavailable",
+        )
+
+
 async def application_error_handler(
     _request: Request, exc: ApplicationError
 ) -> JSONResponse:

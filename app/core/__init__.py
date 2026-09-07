@@ -1,2 +1,1 @@
 """Configuración y componentes transversales."""
-

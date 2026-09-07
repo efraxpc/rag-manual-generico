@@ -60,17 +60,21 @@ La interfaz estará disponible en <http://localhost:8501>. Usa
 `APP_API_BASE_URL` para apuntarla a una API que no se ejecute en
 `http://localhost:8000`.
 
-Esta versión permite seleccionar un manual, preparar una consulta y comprobar
-la conexión con la API desde Streamlit. La API también permite indexar y
-recuperar chunks con embeddings precalculados mediante el patrón Adapter y
-Azure AI Search. La ingesta completa de documentos y la generación de respuestas
-siguen pendientes de implementación y conexión con la interfaz.
+Esta versión permite cargar PDF con texto, TXT y Markdown desde Streamlit,
+dividirlos en fragmentos y guardarlos en Azure AI Search con el botón
+**Procesar y guardar**. Consulta la [guía de carga de archivos](docs/file-ingestion.md)
+para preparar el índice de texto y configurar el entorno.
+
+La API también permite indexar y recuperar chunks con embeddings precalculados
+mediante el patrón Adapter. La generación de embeddings, el OCR y las respuestas
+a preguntas siguen pendientes; los archivos cargados se guardan solo como texto.
 
 Consulta la [guía del almacén vectorial](docs/vector-store.md) para configurar
 Entra ID, preparar el índice y probar los endpoints:
 
 - `POST /api/v1/documents/chunks`: indexación de chunks con embeddings.
 - `POST /api/v1/queries/search`: recuperación vectorial de chunks.
+- `POST /api/v1/documents/upload`: carga de un archivo y almacenamiento textual.
 
 La documentación interactiva estará disponible en:
 

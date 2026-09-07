@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     cors_origins: list[str] = ["http://localhost:3000"]
     azure_search_endpoint: HttpUrl | None = None
     azure_search_index_name: str | None = Field(default=None, min_length=1)
+    azure_search_text_index_name: str | None = Field(default=None, min_length=1)
     azure_search_vector_dimensions: int | None = Field(default=None, ge=1)
     azure_managed_identity_client_id: str | None = Field(default=None, min_length=1)
 
@@ -28,18 +29,30 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_search_configuration(self) -> Self:
-        values = (
-            self.azure_search_endpoint,
+        vector_values = (
             self.azure_search_index_name,
             self.azure_search_vector_dimensions,
         )
-        if any(value is not None for value in values) and not all(
-            value is not None for value in values
+        if any(value is not None for value in vector_values) and not all(
+            value is not None for value in (self.azure_search_endpoint, *vector_values)
         ):
             raise ValueError(
                 "Configura APP_AZURE_SEARCH_ENDPOINT, APP_AZURE_SEARCH_INDEX_NAME y "
                 "APP_AZURE_SEARCH_VECTOR_DIMENSIONS conjuntamente."
             )
+        has_index = (
+            self.azure_search_index_name is not None
+            or self.azure_search_text_index_name is not None
+        )
+        if (self.azure_search_endpoint is not None) != has_index:
+            raise ValueError(
+                "Configura conjuntamente el endpoint y al menos un índice."
+            )
+        if (
+            self.azure_search_text_index_name is not None
+            and self.azure_search_text_index_name == self.azure_search_index_name
+        ):
+            raise ValueError("Los índices textual y vectorial deben ser distintos.")
         return self
 
 
