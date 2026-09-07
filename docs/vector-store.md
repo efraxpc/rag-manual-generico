@@ -45,11 +45,18 @@ la sesión de `az login`. El principal local necesita permisos sobre los datos
 del índice; el rol asignado a la identidad de Container Apps no se transfiere
 automáticamente al usuario local.
 
-En Container Apps configura también
-`APP_AZURE_MANAGED_IDENTITY_CLIENT_ID` con el **client ID** de la identidad
-asignada a la aplicación. El rol `Search Index Data Contributor` ya está
-declarado para esa identidad en Terraform. Estas variables de aplicación aún
-deben incorporarse a la configuración del despliegue cuando se habilite el RAG.
+En Container Apps, Terraform asigna la identidad administrada a la aplicación
+y configura `APP_AZURE_MANAGED_IDENTITY_CLIENT_ID` con su **client ID**. También
+declara el rol `Search Index Data Contributor` sobre el servicio de AI Search
+para cargar y consultar chunks. Puedes obtener sus identificadores con los
+outputs `container_app_identity_client_id` y
+`container_app_identity_principal_id`; el primero selecciona la identidad en el
+SDK y el segundo identifica al principal en RBAC.
+
+Las tres variables `APP_AZURE_SEARCH_*` anteriores aún deben incorporarse a la
+configuración del despliegue cuando se habilite el RAG. La identidad administrada
+se utiliza desde el recurso Azure al que está asignada; configurar su client ID
+en un equipo local no permite autenticarse como esa identidad.
 
 Esta autenticación identifica a la API ante Azure AI Search. No implementa
 autenticación de usuarios en los endpoints HTTP; ese control de acceso sigue

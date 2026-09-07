@@ -15,6 +15,8 @@ resource "azurerm_search_service" "main" {
   tags = local.common_tags
 }
 
+# La identidad de la API carga y consulta chunks en este servicio. La identidad
+# SystemAssigned de AI Search se reserva para conexiones salientes del buscador.
 resource "azurerm_role_assignment" "container_app_search_data" {
   scope                            = azurerm_search_service.main.id
   role_definition_name             = "Search Index Data Contributor"

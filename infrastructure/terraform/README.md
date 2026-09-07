@@ -17,8 +17,14 @@ que comparten ese grupo.
 
 Los flujos de infraestructura y seguridad están representados en:
 
+- [`infrastructure-architecture.mmd`](infrastructure-architecture.mmd): vista
+  general de los grupos de recursos, servicios, identidades y permisos RBAC.
 - [`key-vault-architecture.mmd`](key-vault-architecture.mmd).
 - [`azure-ai-search-entra-rbac.mmd`](azure-ai-search-entra-rbac.mmd).
+
+La vista general refleja la configuración Terraform del entorno `dev`. La
+conexión RAG punteada requiere configurar las variables `APP_AZURE_SEARCH_*`,
+preparar el índice y desplegar una imagen que incluya los endpoints vectoriales.
 
 ## Requisitos
 
@@ -121,11 +127,58 @@ El recurso crea solamente el servicio. Los índices, indexers, skillsets y la
 carga de documentos deben versionarse e implementarse posteriormente mediante
 el SDK o la API REST de Azure AI Search.
 
+## Identidad administrada para cargar chunks
+
+`azurerm_user_assigned_identity.container_app` crea la identidad
+`id-rag-manual-dev` por defecto, configurable con `container_app_identity_name`.
+La Container App tiene asignada esta identidad y recibe su client ID en
+`APP_AZURE_MANAGED_IDENTITY_CLIENT_ID`, que la API utiliza mediante
+`DefaultAzureCredential`.
+
+`azurerm_role_assignment.container_app_search_data` le concede
+`Search Index Data Contributor` con alcance exclusivo al servicio de AI Search
+de este proyecto. El rol permite cargar, actualizar, eliminar y consultar
+documentos en sus índices. No permite crear índices ni cambiar sus definiciones;
+el índice de chunks debe existir previamente. Consulta los
+[permisos de Azure AI Search](https://learn.microsoft.com/en-us/azure/search/search-security-rbac).
+
+La misma identidad conserva `AcrPull` sobre el ACR. La creación de la Container
+App depende de ambas asignaciones RBAC; la propagación de permisos en Azure
+puede tardar unos minutos.
+
+Después de aplicar la configuración, consulta sus identificadores:
+
+```bash
+terraform output -raw container_app_identity_id
+terraform output -raw container_app_identity_client_id
+terraform output -raw container_app_identity_principal_id
+```
+
+El **client ID** selecciona la identidad al obtener un token; el **principal ID**
+identifica al destinatario de los permisos RBAC. No son credenciales.
+La identidad `SystemAssigned` del propio AI Search se usa para conexiones
+salientes del buscador y no es la que utiliza la API para subir chunks.
+
+Para habilitar los endpoints vectoriales también necesitas una imagen de la API
+que los incluya, un índice compatible y las tres variables `APP_AZURE_SEARCH_*`
+descritas en la [guía del almacén vectorial](../../docs/vector-store.md).
+En desarrollo local, `az login` utiliza los permisos del usuario conectado;
+los permisos de la identidad administrada no se transfieren a ese usuario.
+
 ## Adoptar el despliegue existente
 
-Los recursos creados inicialmente mediante Azure CLI ya fueron importados al
-estado local de este workspace. Si se parte de otro estado, importa el
-workspace, el entorno y la aplicación antes de ejecutar un plan:
+El estado de este proyecto es local y no se versiona. Un checkout nuevo no
+incluye los recursos que ya se importaron o desplegaron desde otro equipo.
+Recupera el estado existente o importa los recursos antes de aplicar un plan
+para evitar intentar crearlos de nuevo. Esto incluye las identidades, las
+asignaciones RBAC y AI Search, además del workspace, el entorno y la aplicación:
+
+Si un `apply` termina con `already exists`, puede haber registrado otros
+recursos antes de fallar. Conserva ese estado, guarda una copia y consulta
+`terraform state list` desde `infrastructure/terraform/`. Importa solamente las
+direcciones que falten. El comando
+[`terraform import`](https://developer.hashicorp.com/terraform/cli/commands/import)
+asocia un recurso existente con su dirección en el estado.
 
 ```bash
 terraform import azurerm_log_analytics_workspace.container_apps \
@@ -134,10 +187,24 @@ terraform import azurerm_container_app_environment.main \
   <container-app-environment-resource-id>
 terraform import azurerm_container_app.api \
   <container-app-resource-id>
+terraform import azurerm_user_assigned_identity.container_app \
+  <managed-identity-resource-id>
+terraform import azurerm_role_assignment.container_app_acr_pull \
+  <acr-role-assignment-resource-id>
+terraform import azurerm_search_service.main \
+  <search-service-resource-id>
+terraform import azurerm_role_assignment.container_app_search_data \
+  <search-role-assignment-resource-id>
 ```
 
 El segmento del ID de la aplicación debe escribirse como `containerApps`,
 respetando mayúsculas y minúsculas exigidas por AzureRM.
+
+Después de importar, ejecuta `terraform plan` y comprueba que los recursos
+existentes no aparezcan como nuevas creaciones ni como reemplazos inesperados
+antes de ejecutar otro `apply`. Recupera también los valores de
+`terraform.tfvars`: por ejemplo, omitir `tags` puede hacer que Terraform quite
+etiquetas como `Owner` de los recursos importados.
 
 Consulta el resultado con:
 
@@ -167,6 +234,7 @@ backend.tf                 # Estado local inicial
 azure-ai-search-entra-rbac.mmd # Diagrama de Entra ID y RBAC de AI Search
 container_app.tf           # Log Analytics, identidad, RBAC y Container Apps
 data.tf                    # Identidad y suscripción activas
+infrastructure-architecture.mmd # Vista general de la infraestructura Azure
 key_vault.tf               # Resource Group, Key Vault y RBAC
 key-vault-architecture.mmd # Diagrama Mermaid de la arquitectura
 locals.tf                  # Nombres, protección y etiquetas comunes

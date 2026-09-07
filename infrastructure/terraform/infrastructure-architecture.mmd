@@ -1,0 +1,60 @@
+flowchart TB
+  %% Vista de la configuración Terraform para dev. Los nombres y regiones
+  %% corresponden a este entorno; las variables permiten otros despliegues.
+  %% Los títulos en negrita identifican los servicios Azure utilizados.
+  %% Debajo se muestran los nombres de los recursos de este despliegue.
+  client["Cliente HTTP"]
+  deployer["Principal de despliegue<br/>Autenticación con Azure CLI"]
+
+  subgraph local["Equipo de desarrollo"]
+    terraform["Terraform<br/>Proveedor AzureRM"]
+    state[("Estado local<br/>terraform.tfstate")]
+  end
+
+  subgraph azure["Suscripción Azure · entorno dev"]
+    subgraph app_rg["rg-fastapi-hello · eastus<br/>Resource Group existente, consultado como data"]
+      acr["<b>Azure Container Registry (ACR)</b><br/>fastapihellowkiksu<br/>Existente, consultado como data"]
+      app_identity["<b>Azure Managed Identities</b><br/>id-rag-manual-dev<br/>Identidad asignada por el usuario · UserAssigned"]
+
+      subgraph environment["<b>Azure Container Apps · Managed Environment</b><br/>cae-rag-manual-dev · Consumption"]
+        api["<b>Azure Container Apps</b><br/>rag-manual-api<br/>FastAPI · puerto 8000<br/>0–3 réplicas · 0.5 vCPU · 1 GiB"]
+      end
+
+      logs["<b>Azure Monitor · Log Analytics</b><br/>workspace-rgfastapihellovmC5<br/>Log Analytics Workspace · retención: 30 días"]
+      search["<b>Azure AI Search</b><br/>srch-rag-manual-generico-dev-d6a1d9b7<br/>SKU free · endpoint público<br/>Autenticación: <b>Microsoft Entra ID</b> · claves deshabilitadas"]
+      search_identity["<b>Azure Managed Identities</b><br/>Identidad SystemAssigned de AI Search<br/>Reservada para acceso saliente futuro"]
+    end
+
+    subgraph vault_rg["rg-rag-manual-generico-dev · brazilsouth<br/>Resource Group administrado por Terraform"]
+      vault["<b>Azure Key Vault</b><br/>kv-rag-manu-dev-d6a1d9b7<br/>SKU standard · RBAC · firewall Deny + CIDR autorizados<br/>Soft delete: 7 días · purge protection desactivada en dev"]
+    end
+  end
+
+  deployer -->|"Ejecuta"| terraform
+  terraform -->|"Administra los recursos declarados"| azure
+  terraform -->|"Lee y guarda"| state
+
+  client -->|"HTTPS público"| api
+  acr -->|"Imagen del contenedor"| api
+  api ---|"Identidad asignada; selección por client ID"| app_identity
+  environment -->|"Logs del entorno y contenedores"| logs
+
+  app_identity -->|"RBAC: AcrPull · alcance ACR"| acr
+  app_identity -->|"RBAC: Search Index Data Contributor · alcance servicio"| search
+  search ---|"Identidad propia"| search_identity
+  deployer -->|"RBAC: Key Vault Secrets Officer · opcional · alcance vault"| vault
+
+  %% El permiso está declarado, pero el despliegue aún no configura las tres
+  %% variables APP_AZURE_SEARCH_*. El índice se prepara fuera de Terraform.
+  api -.->|"Carga y consulta de chunks: pendiente habilitar RAG"| search
+
+  classDef azureService fill:#e6f7ff,stroke:#0078d4,stroke-width:3px,color:#003b5c
+  classDef external fill:#f3f4f6,stroke:#6b7280,color:#111827
+  classDef identity fill:#eef2ff,stroke:#4f46e5,stroke-width:2px,color:#312e81
+  classDef tooling fill:#f3e8ff,stroke:#7e22ce,color:#3b0764
+
+  class acr,api,logs,search,vault azureService
+  class client external
+  class deployer,app_identity,search_identity identity
+  class terraform,state tooling
+  style environment fill:#eff6ff,stroke:#0078d4,stroke-width:3px,color:#003b5c

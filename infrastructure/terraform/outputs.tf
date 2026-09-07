@@ -61,6 +61,16 @@ output "container_app_identity_id" {
   value       = azurerm_user_assigned_identity.container_app.id
 }
 
+output "container_app_identity_client_id" {
+  description = "Client ID usado por APP_AZURE_MANAGED_IDENTITY_CLIENT_ID para seleccionar la identidad de la aplicación."
+  value       = azurerm_user_assigned_identity.container_app.client_id
+}
+
+output "container_app_identity_principal_id" {
+  description = "Object ID del principal de la identidad administrada al que se asignan los roles RBAC."
+  value       = azurerm_user_assigned_identity.container_app.principal_id
+}
+
 output "search_service_id" {
   description = "ID de Azure AI Search."
   value       = azurerm_search_service.main.id

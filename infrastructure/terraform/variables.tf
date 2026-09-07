@@ -97,7 +97,7 @@ variable "container_app_environment_name" {
 }
 
 variable "container_app_identity_name" {
-  description = "Nombre de la identidad administrada usada para descargar imágenes del ACR."
+  description = "Nombre de la identidad administrada usada para descargar imágenes del ACR e indexar y consultar chunks en Azure AI Search."
   type        = string
   default     = "id-rag-manual-dev"
 }

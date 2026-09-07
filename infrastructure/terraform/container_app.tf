@@ -89,8 +89,16 @@ resource "azurerm_container_app" "api" {
         name  = "APP_DEBUG"
         value = "false"
       }
+
+      env {
+        name  = "APP_AZURE_MANAGED_IDENTITY_CLIENT_ID"
+        value = azurerm_user_assigned_identity.container_app.client_id
+      }
     }
   }
 
-  depends_on = [azurerm_role_assignment.container_app_acr_pull]
+  depends_on = [
+    azurerm_role_assignment.container_app_acr_pull,
+    azurerm_role_assignment.container_app_search_data,
+  ]
 }
