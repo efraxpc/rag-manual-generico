@@ -10,6 +10,7 @@ htmlcov/
 dist/
 build/
 *.egg-info/
+.run_local.pid
 .idea/
 .vscode/
 

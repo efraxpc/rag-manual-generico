@@ -1,0 +1,31 @@
+{
+  "name": "rag-chunks",
+  "fields": [
+    {"name": "id", "type": "Edm.String", "key": true, "filterable": true},
+    {"name": "chunk_id", "type": "Edm.String", "retrievable": true},
+    {"name": "document_id", "type": "Edm.String", "filterable": true},
+    {"name": "content", "type": "Edm.String", "searchable": true},
+    {"name": "source", "type": "Edm.String", "retrievable": true},
+    {"name": "page", "type": "Edm.Int32", "retrievable": true},
+    {
+      "name": "embedding",
+      "type": "Collection(Edm.Single)",
+      "searchable": true,
+      "retrievable": false,
+      "dimensions": 3,
+      "vectorSearchProfile": "rag-vector-profile"
+    }
+  ],
+  "vectorSearch": {
+    "algorithms": [
+      {
+        "name": "rag-hnsw",
+        "kind": "hnsw",
+        "hnswParameters": {"metric": "cosine"}
+      }
+    ],
+    "profiles": [
+      {"name": "rag-vector-profile", "algorithm": "rag-hnsw"}
+    ]
+  }
+}

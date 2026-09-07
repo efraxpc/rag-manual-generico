@@ -1,0 +1,30 @@
+%% Patrón Adapter aplicado al almacenamiento vectorial del RAG.
+%% Implementado en app/rag, app/services y app/integrations.
+%% La extracción, el chunking y la generación de embeddings son etapas previas.
+classDiagram
+    direction LR
+
+    class IngestionService
+    class QueryService
+
+    class VectorStore {
+        <<interface>>
+        +index_chunks(chunks)
+        +search(query)
+    }
+
+    class AzureSearchAdapter {
+        +index_chunks(chunks)
+        +search(query)
+    }
+
+    class AzureSearchSDK {
+        <<external>>
+    }
+
+    IngestionService --> VectorStore : usa
+    QueryService --> VectorStore : usa
+    AzureSearchAdapter ..|> VectorStore : implementa
+    AzureSearchAdapter --> AzureSearchSDK : traduce y delega
+
+    note for AzureSearchAdapter "Convierte los chunks al formato de Azure\nNormaliza las respuestas del SDK"

@@ -18,7 +18,33 @@ cp .env.example .env
 
 ## Ejecución
 
-Inicia la API en una terminal:
+Inicia la API y la interfaz juntas con:
+
+```bash
+./scripts/run_local.sh
+```
+
+El script usa los puertos `8000` y `8501` y detiene ambos servicios al pulsar
+`Ctrl+C`. Puedes personalizarlos mediante `RAG_API_PORT` y `RAG_UI_PORT`:
+
+```bash
+RAG_API_PORT=8080 RAG_UI_PORT=8502 ./scripts/run_local.sh
+```
+
+Para reiniciar ambos servicios desde otra terminal, ejecuta:
+
+```bash
+./scripts/run_local.sh restart
+```
+
+Si no hay una instancia registrada, en Linux `restart` también detecta y detiene
+instancias anteriores de este mismo script que no tengan archivo PID, y luego
+inicia ambos servicios. Si un puerto está ocupado por otro proceso, el script
+informa del conflicto y no inicia los servicios. El mensaje de disponibilidad
+aparece cuando la API y la interfaz responden a sus comprobaciones de salud.
+
+También puedes iniciar cada servicio por separado. Inicia la API en una
+terminal:
 
 ```bash
 uvicorn app.main:app --reload
@@ -35,8 +61,16 @@ La interfaz estará disponible en <http://localhost:8501>. Usa
 `http://localhost:8000`.
 
 Esta versión permite seleccionar un manual, preparar una consulta y comprobar
-la conexión con la API. El procesamiento RAG se conectará cuando exista el
-endpoint de consultas correspondiente.
+la conexión con la API desde Streamlit. La API también permite indexar y
+recuperar chunks con embeddings precalculados mediante el patrón Adapter y
+Azure AI Search. La ingesta completa de documentos y la generación de respuestas
+siguen pendientes de implementación y conexión con la interfaz.
+
+Consulta la [guía del almacén vectorial](docs/vector-store.md) para configurar
+Entra ID, preparar el índice y probar los endpoints:
+
+- `POST /api/v1/documents/chunks`: indexación de chunks con embeddings.
+- `POST /api/v1/queries/search`: recuperación vectorial de chunks.
 
 La documentación interactiva estará disponible en:
 
@@ -57,10 +91,14 @@ ruff check .
 app/
 ├── api/             # Rutas HTTP versionadas
 ├── core/            # Configuración y componentes compartidos
+├── integrations/    # Adaptadores de proveedores: Azure AI Search
+├── rag/             # Contratos y modelos del RAG
 ├── schemas/         # Modelos Pydantic de entrada y salida
+├── services/        # Servicios de ingesta y consulta
 ├── main.py          # Creación de la API
 └── streamlit_app.py # Interfaz web básica
 tests/               # Pruebas automatizadas
+docs/                # Arquitectura y uso del almacén vectorial
 infrastructure/      # Infraestructura como código con Terraform
 ```
 

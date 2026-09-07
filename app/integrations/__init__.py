@@ -1,0 +1,1 @@
+"""Adaptadores para proveedores externos."""
