@@ -60,6 +60,13 @@ La interfaz estará disponible en <http://localhost:8501>. Usa
 `APP_API_BASE_URL` para apuntarla a una API que no se ejecute en
 `http://localhost:8000`.
 
+Los errores del backend aparecen en la terminal donde ejecutas Uvicorn o
+`./scripts/run_local.sh`. Los errores controlados incluyen método, ruta, estado
+HTTP y código; los fallos `5xx` también muestran el traceback y la causa original
+(por ejemplo, el error del SDK de Azure). Los errores de validación se registran
+como advertencias. No hace falta activar `APP_DEBUG`; las respuestas HTTP
+conservan sus mensajes controlados. Uvicorn registra las excepciones no controladas.
+
 Esta versión permite cargar PDF con texto, TXT y Markdown desde Streamlit,
 dividirlos en fragmentos y guardarlos en Azure AI Search con el botón
 **Procesar y guardar**. Consulta la [guía de carga de archivos](docs/file-ingestion.md)

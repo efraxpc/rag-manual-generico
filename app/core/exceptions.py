@@ -1,7 +1,13 @@
+import logging
 from typing import Any
 
 from fastapi import Request
+from fastapi.exception_handlers import request_validation_exception_handler
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+
+# Uvicorn ya configura este logger para escribir en la consola del backend.
+logger = logging.getLogger("uvicorn.error")
 
 
 class ApplicationError(Exception):
@@ -55,8 +61,20 @@ class TextStoreUnavailableError(ApplicationError):
 
 
 async def application_error_handler(
-    _request: Request, exc: ApplicationError
+    request: Request, exc: ApplicationError
 ) -> JSONResponse:
+    server_error = exc.status_code >= 500
+    logger.log(
+        logging.ERROR if server_error else logging.WARNING,
+        "%s %s -> %s [%s] %s",
+        request.method,
+        request.url.path,
+        exc.status_code,
+        exc.code,
+        exc.message,
+        # Conserva la causa del SDK enlazada con `raise ... from exc`.
+        exc_info=(type(exc), exc, exc.__traceback__) if server_error else None,
+    )
     return JSONResponse(
         status_code=exc.status_code,
         content={
@@ -67,3 +85,18 @@ async def application_error_handler(
             }
         },
     )
+
+
+async def validation_error_handler(
+    request: Request, exc: RequestValidationError
+) -> JSONResponse:
+    # Los errores completos incluyen valores de entrada; solo registramos
+    # la ubicación y el tipo, sin el archivo, cuerpo, cabeceras ni query string.
+    errors = [{"loc": error["loc"], "type": error["type"]} for error in exc.errors()]
+    logger.warning(
+        "%s %s -> 422 [request_validation_error] %s",
+        request.method,
+        request.url.path,
+        errors,
+    )
+    return await request_validation_exception_handler(request, exc)
