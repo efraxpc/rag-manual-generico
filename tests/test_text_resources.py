@@ -7,15 +7,17 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from app import main
+from app.api import dependencies
 from app.core import resources
+from app.core.auth import require_user
 from app.core.config import Settings
 from app.integrations.azure_text_search import AzureTextSearchAdapter
 from app.rag.contracts import TextChunkStore
+from tests.auth_helpers import authenticated_user, entra_settings
 
 
 def text_settings(**overrides: object) -> Settings:
-    return Settings(
-        _env_file=None,
+    return entra_settings(
         **{
             "azure_search_endpoint": "https://example.search.windows.net",
             "azure_search_text_index_name": "rag-text-chunks",
@@ -30,7 +32,7 @@ def text_settings(**overrides: object) -> Settings:
 def test_text_configuration_does_not_require_vectors() -> None:
     settings = text_settings()
     assert settings.azure_search_vector_dimensions is None
-    with resources.open_vector_store(settings) as vector:
+    with resources.open_vector_store(settings, user_assertion="user-token") as vector:
         assert vector is None
 
 
@@ -77,14 +79,19 @@ def test_text_clients_use_identity_and_close(monkeypatch: pytest.MonkeyPatch) ->
     client.__enter__.return_value = client
     credential_factory = Mock(return_value=credential)
     client_factory = Mock(return_value=client)
-    monkeypatch.setattr(resources, "DefaultAzureCredential", credential_factory)
+    monkeypatch.setattr(resources, "OnBehalfOfCredential", credential_factory)
     monkeypatch.setattr(resources, "SearchClient", client_factory)
     with pytest.raises(RuntimeError):
-        with resources.open_text_store(text_settings()) as store:
+        with resources.open_text_store(
+            text_settings(), user_assertion="user-token"
+        ) as store:
             assert isinstance(store, AzureTextSearchAdapter)
             raise RuntimeError()
     credential_factory.assert_called_once_with(
-        managed_identity_client_id="test-client-id"
+        tenant_id=str(text_settings().entra_tenant_id),
+        client_id=str(text_settings().entra_api_client_id),
+        client_secret="test-api-secret",
+        user_assertion="user-token",
     )
     client_factory.assert_called_once_with(
         endpoint="https://example.search.windows.net/",
@@ -104,7 +111,8 @@ def test_unconfigured_text_store_does_not_create_client(
         text_settings(
             azure_search_endpoint=None,
             azure_search_text_index_name=None,
-        )
+        ),
+        user_assertion="user-token",
     ) as store:
         assert store is None
     factory.assert_not_called()
@@ -115,18 +123,21 @@ def test_text_only_lifespan_and_vector_503(monkeypatch: pytest.MonkeyPatch) -> N
     closed = []
 
     @contextmanager
-    def open_store(settings: Settings) -> Iterator[TextChunkStore]:
+    def open_store(
+        settings: Settings, *, user_assertion: str
+    ) -> Iterator[TextChunkStore]:
+        assert user_assertion == authenticated_user().assertion
         try:
             yield store
         finally:
             closed.append(True)
 
     monkeypatch.setattr(main, "get_settings", text_settings)
-    monkeypatch.setattr(main, "open_text_store", open_store)
+    monkeypatch.setattr(dependencies, "open_text_store", open_store)
     app = main.create_app()
+    app.dependency_overrides[require_user] = authenticated_user
     with TestClient(app) as client:
-        assert app.state.text_store is store
-        assert app.state.vector_store is None
+        assert not hasattr(app.state, "text_store")
         assert (
             client.post(
                 "/api/v1/documents/upload", files={"file": ("a.txt", b"Text")}
@@ -137,4 +148,4 @@ def test_text_only_lifespan_and_vector_503(monkeypatch: pytest.MonkeyPatch) -> N
         assert response.status_code == 503
         assert response.json()["error"]["code"] == "vector_store_not_configured"
     assert closed == [True]
-    assert app.state.text_store is None
+    assert not hasattr(app.state, "text_store")

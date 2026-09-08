@@ -46,6 +46,14 @@ resource "azurerm_container_app" "api" {
   workload_profile_name        = "Consumption"
   tags                         = local.common_tags
 
+  dynamic "secret" {
+    for_each = local.entra_auth_enabled ? [1] : []
+    content {
+      name  = "entra-api-client-secret"
+      value = var.entra_api_client_secret
+    }
+  }
+
   identity {
     type         = "UserAssigned"
     identity_ids = [azurerm_user_assigned_identity.container_app.id]
@@ -91,14 +99,68 @@ resource "azurerm_container_app" "api" {
       }
 
       env {
-        name  = "APP_AZURE_MANAGED_IDENTITY_CLIENT_ID"
-        value = azurerm_user_assigned_identity.container_app.client_id
+        name  = "APP_AZURE_SEARCH_ENDPOINT"
+        value = azurerm_search_service.main.endpoint
+      }
+
+      env {
+        name  = "APP_AZURE_SEARCH_TEXT_INDEX_NAME"
+        value = azapi_data_plane_resource.text_index.name
+      }
+
+      dynamic "env" {
+        for_each = local.entra_auth_enabled ? [1] : []
+        content {
+          name  = "APP_ENTRA_TENANT_ID"
+          value = var.entra_tenant_id
+        }
+      }
+
+      dynamic "env" {
+        for_each = local.entra_auth_enabled ? [1] : []
+        content {
+          name  = "APP_ENTRA_API_CLIENT_ID"
+          value = var.entra_api_client_id
+        }
+      }
+
+      dynamic "env" {
+        for_each = local.entra_auth_enabled ? [1] : []
+        content {
+          name        = "APP_ENTRA_API_CLIENT_SECRET"
+          secret_name = "entra-api-client-secret"
+        }
+      }
+
+      dynamic "env" {
+        for_each = local.entra_auth_enabled ? [1] : []
+        content {
+          name  = "APP_ENTRA_FRONTEND_CLIENT_ID"
+          value = var.entra_frontend_client_id
+        }
       }
     }
   }
 
   depends_on = [
     azurerm_role_assignment.container_app_acr_pull,
-    azurerm_role_assignment.container_app_search_data,
   ]
+
+  lifecycle {
+    precondition {
+      condition = (
+        alltrue([for value in local.entra_auth_values : value == null]) ||
+        local.entra_auth_enabled
+      )
+      error_message = "Configura conjuntamente entra_tenant_id, entra_api_client_id, entra_api_client_secret y entra_frontend_client_id."
+    }
+
+    precondition {
+      condition = (
+        !local.entra_auth_enabled ||
+        var.entra_api_client_id != var.entra_frontend_client_id
+      )
+      error_message = "Los registros de aplicación de FastAPI y Streamlit deben ser distintos."
+    }
+  }
 }

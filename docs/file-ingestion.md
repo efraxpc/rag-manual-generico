@@ -36,21 +36,22 @@ El índice contiene `id` (clave), `chunk_id`, `document_id` (filtrable), `conten
 (buscable), `source` y `page` (entero opcional). Todos son recuperables y no hay
 campo vectorial. Su definición está en `app.commands.prepare_text_index`.
 
-Para **cargar documentos**, la identidad de la API necesita
-`Search Index Data Contributor`. Terraform ya declara ese rol para la identidad
-de Container Apps. En local, los permisos deben asignarse al usuario utilizado
-por `az login`; los permisos de la identidad de Azure no se transfieren al usuario.
-`DefaultAzureCredential` autentica ambas operaciones sin claves API.
+Para **cargar documentos**, cada usuario necesita `Search Index Data Contributor`
+sobre el servicio o el índice. FastAPI intercambia el token de la interfaz por un
+token de Search mediante On-Behalf-Of. La identidad administrada de Container Apps
+no tiene permisos de datos en Search y la API no la usa como alternativa. Consulta
+la [guía de autenticación delegada](entra-auth.md).
 
 Para una puesta en marcha posterior en Container Apps, incorpora
 `APP_AZURE_SEARCH_ENDPOINT` y `APP_AZURE_SEARCH_TEXT_INDEX_NAME` a las variables
-del contenedor y publica una imagen con esta implementación. Mantén
-`APP_AZURE_MANAGED_IDENTITY_CLIENT_ID`, ya configurada por Terraform. Este cambio
-no despliega la imagen, no aplica Terraform y no crea el índice por sí solo.
+del contenedor y publica una imagen con esta implementación. Terraform también
+inyecta la configuración de Entra si completas sus cuatro variables. Aplicar la
+infraestructura y publicar la imagen siguen siendo pasos separados.
 
 ## Uso desde la interfaz o la API
 
-Ejecuta `./scripts/run_local.sh`, selecciona un archivo y pulsa **Procesar y
+Configura primero Entra ID según la guía de autenticación. Después ejecuta
+`./scripts/run_local.sh`, inicia sesión, selecciona un archivo y pulsa **Procesar y
 guardar**. La interfaz muestra el número de fragmentos guardados y las páginas
 omitidas. Las reevaluaciones de Streamlit no vuelven a enviar el archivo.
 El formulario de preguntas todavía prepara la consulta sin generar respuestas.
@@ -59,6 +60,7 @@ También puedes utilizar el endpoint directamente:
 
 ```bash
 curl -X POST http://localhost:8000/api/v1/documents/upload \
+  -H 'Authorization: Bearer <token-para-la-api>' \
   -F 'file=@manual.pdf'
 ```
 
@@ -101,8 +103,10 @@ Los errores de aplicación usan `{"error":{"code":"...","message":"...","details
 | 413 | Archivo superior a 10 MiB. |
 | 415 | Extensión no admitida. |
 | 422 | Nombre inválido, texto vacío o no UTF-8, PDF dañado, cifrado o sin texto. Un archivo ausente usa la validación estándar de FastAPI. |
+| 401 | Token ausente, caducado, mal firmado o destinado a otra API. |
+| 403 | Falta consentimiento delegado o el usuario no tiene el rol necesario en Search. |
 | 502 | Azure rechazó fragmentos o no devolvió su confirmación; `details.failed_chunks` identifica los fallidos del lote. |
-| 503 | Almacén textual sin configurar, índice inexistente, falta de permisos o fallo de conexión con Azure. |
+| 503 | Almacén textual sin configurar, índice inexistente o fallo de conexión con Azure. |
 
 La indexación usa lotes de hasta 1.000 documentos y un presupuesto conservador
 de 15 MB serializados para respetar el máximo de 16 MB de Azure. No es una

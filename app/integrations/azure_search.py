@@ -12,6 +12,7 @@ from pydantic import ValidationError
 from app.core.exceptions import (
     ApplicationError,
     ChunkIndexingError,
+    SearchAccessDeniedError,
     VectorStoreUnavailableError,
 )
 from app.rag.contracts import VectorStore
@@ -74,6 +75,8 @@ class AzureSearchAdapter(VectorStore):
                 # upload reemplaza el documento completo si la clave ya existe.
                 results = self._client.upload_documents(documents=documents)
             except AzureError as exc:
+                if getattr(exc, "status_code", None) == 403:
+                    raise SearchAccessDeniedError() from exc
                 raise VectorStoreUnavailableError() from exc
 
             succeeded = {result.key for result in results if result.succeeded}
@@ -121,6 +124,8 @@ class AzureSearchAdapter(VectorStore):
             ]
         except AzureError as exc:
             # La petición también puede fallar durante la paginación del SDK.
+            if getattr(exc, "status_code", None) == 403:
+                raise SearchAccessDeniedError() from exc
             raise VectorStoreUnavailableError() from exc
         except (KeyError, TypeError, ValidationError) as exc:
             raise ApplicationError(

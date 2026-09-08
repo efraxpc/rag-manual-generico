@@ -6,9 +6,11 @@ from fastapi.testclient import TestClient
 
 from app import main
 from app.api.dependencies import get_vector_store
+from app.core.auth import require_user
 from app.core.config import Settings
 from app.core.exceptions import ChunkIndexingError, VectorStoreUnavailableError
 from app.rag.models import EmbeddedChunk, SearchHit, VectorQuery
+from tests.auth_helpers import authenticated_user
 
 
 class MemoryVectorStore:
@@ -134,6 +136,7 @@ def test_unconfigured_store_returns_503_but_health_still_works(
     client: TestClient,
 ) -> None:
     client.app.dependency_overrides.clear()
+    client.app.dependency_overrides[require_user] = authenticated_user
     response = client.post(
         "/api/v1/queries/search", json={"embedding": [0.1, 0.2, 0.3]}
     )

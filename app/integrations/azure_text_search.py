@@ -11,6 +11,7 @@ from azure.search.documents import SearchClient
 from app.core.exceptions import (
     ApplicationError,
     ChunkIndexingError,
+    SearchAccessDeniedError,
     TextStoreUnavailableError,
 )
 from app.rag.contracts import TextChunkStore
@@ -64,6 +65,8 @@ class AzureTextSearchAdapter(TextChunkStore):
         try:
             results = self._client.upload_documents(documents=documents)
         except AzureError as exc:
+            if getattr(exc, "status_code", None) == 403:
+                raise SearchAccessDeniedError() from exc
             raise TextStoreUnavailableError() from exc
         succeeded = {result.key for result in results if result.succeeded}
         failed = [

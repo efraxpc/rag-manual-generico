@@ -62,7 +62,7 @@ output "container_app_identity_id" {
 }
 
 output "container_app_identity_client_id" {
-  description = "Client ID usado por APP_AZURE_MANAGED_IDENTITY_CLIENT_ID para seleccionar la identidad de la aplicación."
+  description = "Client ID de la identidad administrada usada para descargar imágenes desde ACR."
   value       = azurerm_user_assigned_identity.container_app.client_id
 }
 

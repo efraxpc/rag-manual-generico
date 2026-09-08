@@ -97,7 +97,7 @@ variable "container_app_environment_name" {
 }
 
 variable "container_app_identity_name" {
-  description = "Nombre de la identidad administrada usada para descargar imágenes del ACR e indexar y consultar chunks en Azure AI Search."
+  description = "Nombre de la identidad administrada usada por Container Apps para descargar imágenes del ACR."
   type        = string
   default     = "id-rag-manual-dev"
 }
@@ -197,6 +197,50 @@ variable "search_service_sku" {
     )
     error_message = "search_service_sku debe ser un SKU compatible con Azure AI Search."
   }
+}
+
+variable "search_user_group_object_id" {
+  description = "Object ID opcional del grupo de Entra autorizado a cargar y consultar documentos en Azure AI Search mediante acceso delegado."
+  type        = string
+  default     = null
+  nullable    = true
+
+  validation {
+    condition = (
+      var.search_user_group_object_id == null ||
+      can(regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$", var.search_user_group_object_id))
+    )
+    error_message = "search_user_group_object_id debe ser un UUID válido o null."
+  }
+}
+
+variable "entra_tenant_id" {
+  description = "Tenant ID de Microsoft Entra usado por Streamlit y FastAPI."
+  type        = string
+  default     = null
+  nullable    = true
+}
+
+variable "entra_api_client_id" {
+  description = "Client ID del registro de aplicación de FastAPI."
+  type        = string
+  default     = null
+  nullable    = true
+}
+
+variable "entra_api_client_secret" {
+  description = "Client secret del registro de FastAPI para el intercambio On-Behalf-Of. Pásalo mediante TF_VAR_entra_api_client_secret."
+  type        = string
+  default     = null
+  nullable    = true
+  sensitive   = true
+}
+
+variable "entra_frontend_client_id" {
+  description = "Client ID del registro de aplicación de Streamlit autorizado para llamar a FastAPI."
+  type        = string
+  default     = null
+  nullable    = true
 }
 
 variable "tags" {

@@ -2,6 +2,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 .env
+.streamlit/secrets.toml
 .venv/
 .pytest_cache/
 .ruff_cache/

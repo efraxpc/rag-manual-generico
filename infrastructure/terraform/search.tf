@@ -15,11 +15,13 @@ resource "azurerm_search_service" "main" {
   tags = local.common_tags
 }
 
-# La identidad de la API carga y consulta chunks en este servicio. La identidad
-# SystemAssigned de AI Search se reserva para conexiones salientes del buscador.
-resource "azurerm_role_assignment" "container_app_search_data" {
-  scope                            = azurerm_search_service.main.id
-  role_definition_name             = "Search Index Data Contributor"
-  principal_id                     = azurerm_user_assigned_identity.container_app.principal_id
-  skip_service_principal_aad_check = true
+# Las peticiones de la API usan el flujo On-Behalf-Of y llegan a Search con la
+# identidad del usuario. Este grupo determina quién puede cargar y consultar.
+resource "azurerm_role_assignment" "search_users_data" {
+  count = var.search_user_group_object_id == null ? 0 : 1
+
+  scope                = azurerm_search_service.main.id
+  role_definition_name = "Search Index Data Contributor"
+  principal_id         = var.search_user_group_object_id
+  principal_type       = "Group"
 }

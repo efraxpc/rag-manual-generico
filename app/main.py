@@ -1,34 +1,15 @@
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
-
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.router import api_router
+from app.core.auth import EntraTokenVerifier
 from app.core.config import get_settings
 from app.core.exceptions import (
     ApplicationError,
     application_error_handler,
     validation_error_handler,
 )
-from app.core.resources import open_text_store, open_vector_store
-
-
-@asynccontextmanager
-async def lifespan(application: FastAPI) -> AsyncIterator[None]:
-    settings = get_settings()
-    with (
-        open_vector_store(settings) as vector_store,
-        open_text_store(settings) as text_store,
-    ):
-        application.state.vector_store = vector_store
-        application.state.text_store = text_store
-        try:
-            yield
-        finally:
-            application.state.vector_store = None
-            application.state.text_store = None
 
 
 def create_app() -> FastAPI:
@@ -36,13 +17,16 @@ def create_app() -> FastAPI:
     settings = get_settings()
 
     application = FastAPI(
-        lifespan=lifespan,
         title=settings.app_name,
         version=settings.app_version,
         debug=settings.debug,
         docs_url="/docs" if settings.docs_enabled else None,
         redoc_url="/redoc" if settings.docs_enabled else None,
         openapi_url="/openapi.json" if settings.docs_enabled else None,
+    )
+    application.state.settings = settings
+    application.state.token_verifier = (
+        EntraTokenVerifier(settings) if settings.entra_configured else None
     )
 
     application.add_middleware(

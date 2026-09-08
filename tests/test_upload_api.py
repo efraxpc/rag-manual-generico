@@ -6,9 +6,11 @@ from fastapi.testclient import TestClient
 
 from app import main
 from app.api.dependencies import get_text_store
+from app.core.auth import require_user
 from app.core.config import Settings
 from app.core.exceptions import ChunkIndexingError, TextStoreUnavailableError
 from app.services.file_ingestion import MAX_UPLOAD_BYTES
+from tests.auth_helpers import authenticated_user
 from tests.pdf_factory import make_pdf
 
 
@@ -74,6 +76,7 @@ def test_missing_file(client: TestClient) -> None:
 
 def test_unconfigured_upload(client: TestClient) -> None:
     client.app.dependency_overrides.clear()
+    client.app.dependency_overrides[require_user] = authenticated_user
     response = client.post(
         "/api/v1/documents/upload", files={"file": ("a.txt", b"Text")}
     )

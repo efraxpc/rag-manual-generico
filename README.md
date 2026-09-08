@@ -60,6 +60,11 @@ La interfaz estará disponible en <http://localhost:8501>. Usa
 `APP_API_BASE_URL` para apuntarla a una API que no se ejecute en
 `http://localhost:8000`.
 
+La interfaz requiere iniciar sesión con Microsoft. FastAPI valida el token de
+acceso y usa el flujo On-Behalf-Of para conectarse a Azure AI Search con la
+identidad del usuario. Consulta la [guía de autenticación](docs/entra-auth.md)
+para crear los registros de aplicación y configurar permisos y secretos.
+
 Los errores del backend aparecen en la terminal donde ejecutas Uvicorn o
 `./scripts/run_local.sh`. Los errores controlados incluyen método, ruta, estado
 HTTP y código; los fallos `5xx` también muestran el traceback y la causa original

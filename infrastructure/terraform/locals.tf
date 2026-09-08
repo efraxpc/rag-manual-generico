@@ -1,4 +1,14 @@
 locals {
+  entra_auth_values = [
+    var.entra_tenant_id,
+    var.entra_api_client_id,
+    var.entra_api_client_secret,
+    var.entra_frontend_client_id,
+  ]
+  entra_auth_enabled = nonsensitive(alltrue([
+    for value in local.entra_auth_values : value != null
+  ]))
+
   normalized_project_name = trim(
     replace(
       replace(lower(var.project_name), "/[^0-9a-z-]/", "-"),

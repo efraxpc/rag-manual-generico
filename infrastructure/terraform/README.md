@@ -8,7 +8,7 @@ recursos:
   preexistente `rg-fastapi-hello` y usando el ACR preexistente
   `fastapihellowkiksu`.
 - Un servicio Azure AI Search con autenticación Microsoft Entra ID y acceso
-  RBAC para la identidad administrada de la API.
+  RBAC delegado para un grupo opcional de usuarios.
 
 Terraform no administra el Resource Group de Container Apps, el ACR, sus
 imágenes, secretos, claves ni certificados. Ambos recursos se consultan como
@@ -97,8 +97,9 @@ El despliegue crea:
 - Una identidad administrada asignada por el usuario y su rol `AcrPull`.
 - Una Container App con HTTPS público, una sola revisión activa y escalado
   configurable, incluido scale-to-zero.
-- Un Azure AI Search y el rol `Search Index Data Contributor` para que la API
-  pueda consultar y cargar documentos sin API keys.
+- Un Azure AI Search, su índice textual y, si se configura
+  `search_user_group_object_id`, el rol `Search Index Data Contributor` para
+  ese grupo de usuarios.
 
 La imagen debe existir antes de ejecutar `terraform apply`. Puede construirse y
 publicarse mediante ACR Tasks:
@@ -118,35 +119,34 @@ de Key Vault:
 ```bash
 terraform plan \
   -target=azurerm_search_service.main \
-  -target=azurerm_role_assignment.container_app_search_data \
+  -target=azapi_data_plane_resource.text_index \
+  -target=azurerm_role_assignment.search_users_data \
   -out=search.tfplan
 terraform apply search.tfplan
 ```
 
-El recurso crea solamente el servicio. Para preparar el índice textual y cargar
-PDF con texto, TXT y Markdown desde la aplicación, consulta la
-[guía de carga de archivos](../../docs/file-ingestion.md). El comando de preparación
-del índice usa el SDK y se ejecuta por separado de Terraform. Los indexers y
-skillsets no están implementados.
+Terraform crea el servicio y el índice textual. Para cargar PDF con texto, TXT y
+Markdown desde la aplicación, consulta la
+[guía de carga de archivos](../../docs/file-ingestion.md). El comando Python de
+preparación del índice queda disponible para validar entornos existentes. Los
+indexers y skillsets no están implementados.
 
-## Identidad administrada para cargar chunks
+## Identidades y acceso delegado a Search
 
 `azurerm_user_assigned_identity.container_app` crea la identidad
 `id-rag-manual-dev` por defecto, configurable con `container_app_identity_name`.
-La Container App tiene asignada esta identidad y recibe su client ID en
-`APP_AZURE_MANAGED_IDENTITY_CLIENT_ID`, que la API utiliza mediante
-`DefaultAzureCredential`.
+La Container App tiene asignada esta identidad únicamente para descargar su
+imagen mediante `AcrPull`. El backend no recibe su client ID ni la usa para las
+peticiones a Search.
 
-`azurerm_role_assignment.container_app_search_data` le concede
-`Search Index Data Contributor` con alcance exclusivo al servicio de AI Search
-de este proyecto. El rol permite cargar, actualizar, eliminar y consultar
-documentos en sus índices. No permite crear índices ni cambiar sus definiciones;
-el índice de chunks debe existir previamente. Consulta los
+`azurerm_role_assignment.search_users_data` concede `Search Index Data Contributor`
+al grupo indicado en `search_user_group_object_id`. El rol permite a sus usuarios
+cargar, actualizar, eliminar y consultar documentos mediante el flujo OBO. No
+permite crear índices ni cambiar sus definiciones. Consulta los
 [permisos de Azure AI Search](https://learn.microsoft.com/en-us/azure/search/search-security-rbac).
 
-La misma identidad conserva `AcrPull` sobre el ACR. La creación de la Container
-App depende de ambas asignaciones RBAC; la propagación de permisos en Azure
-puede tardar unos minutos.
+La identidad de Container Apps conserva únicamente `AcrPull` sobre el ACR. La
+propagación de permisos del grupo en Azure puede tardar unos minutos.
 
 Después de aplicar la configuración, consulta sus identificadores:
 
@@ -158,14 +158,24 @@ terraform output -raw container_app_identity_principal_id
 
 El **client ID** selecciona la identidad al obtener un token; el **principal ID**
 identifica al destinatario de los permisos RBAC. No son credenciales.
-La identidad `SystemAssigned` del propio AI Search se usa para conexiones
-salientes del buscador y no es la que utiliza la API para subir chunks.
+La identidad `SystemAssigned` del propio AI Search se reserva para conexiones
+salientes del buscador. Tampoco representa a los usuarios de la aplicación.
 
 Para habilitar los endpoints vectoriales también necesitas una imagen de la API
 que los incluya, un índice compatible y las tres variables `APP_AZURE_SEARCH_*`
 descritas en la [guía del almacén vectorial](../../docs/vector-store.md).
-En desarrollo local, `az login` utiliza los permisos del usuario conectado;
-los permisos de la identidad administrada no se transfieren a ese usuario.
+Las peticiones usan el login de Streamlit y el flujo On-Behalf-Of descrito en la
+[guía de autenticación](../../docs/entra-auth.md). `az login` queda limitado a
+Terraform y a comandos administrativos.
+
+Terraform configura FastAPI, pero este módulo todavía no despliega la interfaz
+Streamlit. En el hosting del frontend debes definir `.streamlit/secrets.toml` o
+su equivalente seguro y registrar su URI pública de callback.
+
+Si configuras `entra_api_client_secret` mediante Terraform, el valor queda
+almacenado en el estado aunque la variable sea sensible. Antes de usarlo en
+producción, mueve el estado local a un backend remoto cifrado y con acceso
+restringido, o sustituye el secreto por una credencial federada.
 
 ## Adoptar el despliegue existente
 
@@ -195,8 +205,6 @@ terraform import azurerm_role_assignment.container_app_acr_pull \
   <acr-role-assignment-resource-id>
 terraform import azurerm_search_service.main \
   <search-service-resource-id>
-terraform import azurerm_role_assignment.container_app_search_data \
-  <search-role-assignment-resource-id>
 ```
 
 El segmento del ID de la aplicación debe escribirse como `containerApps`,

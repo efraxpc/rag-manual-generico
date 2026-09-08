@@ -1,65 +1,57 @@
 flowchart LR
   terraform["Terraform<br/>search.tf"]
 
+  subgraph frontend["Streamlit"]
+    user["Usuario conectado"]
+    access_token["Token para FastAPI<br/>scope: access_as_user"]
+  end
+
   subgraph workload["Azure Container Apps"]
     app["RAG Manual API"]
-    managed_identity["User Assigned Managed Identity<br/>id-rag-manual-dev"]
+    managed_identity["User Assigned Managed Identity<br/>solo ACR Pull"]
   end
 
   subgraph entra_boundary["Microsoft Entra ID"]
-    service_principal["Service principal de la<br/>Managed Identity"]
-    token_service["Emisor de tokens OAuth 2.0"]
+    frontend_app["Registro de aplicación<br/>Streamlit"]
+    api_app["Registro de aplicación<br/>FastAPI confidencial"]
+    obo["Flujo On-Behalf-Of"]
+    group["Grupo autorizado de usuarios"]
   end
 
   subgraph rbac_boundary["Azure RBAC"]
-    role_assignment["Role assignment"]
-    role["Search Index Data Contributor"]
-    scope["Scope<br/>Azure AI Search completo"]
+    role_assignment["Search Index Data Contributor<br/>Scope: servicio Search"]
   end
 
   subgraph search_boundary["Azure AI Search"]
-    search_service["srch-rag-manual-generico-dev-d6a1d9b7"]
-    search_endpoint["Data plane endpoint<br/>search.windows.net"]
-    documents["Documentos de los índices<br/>consultar, cargar, actualizar y eliminar"]
-    definitions["Definiciones de índices, indexers<br/>y skillsets: no autorizadas"]
-    search_identity["System Assigned Identity<br/>reservada para acceso saliente futuro"]
+    search_service["Servicio Search<br/>claves deshabilitadas"]
+    documents["Documentos de los índices"]
   end
 
-  keys_disabled["API keys deshabilitadas<br/>local_authentication_enabled = false"]
+  user -->|"1. Login OIDC"| frontend_app
+  frontend_app -->|"2. Emite"| access_token
+  access_token -->|"3. Authorization: Bearer"| app
+  app -->|"4. Valida firma, tenant, audiencia, azp y scope"| api_app
+  app -->|"5. Intercambia token"| obo
+  api_app --> obo
+  obo -->|"6. Token de Search del usuario"| app
+  app -->|"7. HTTPS + token delegado"| search_service
+  group -->|"Usuario miembro"| user
+  group --> role_assignment
+  role_assignment --> search_service
+  search_service --> documents
 
-  managed_identity -->|"Identidad usada por el proceso"| app
-  managed_identity --- service_principal
-  app -->|"1. Solicita token para Azure AI Search"| token_service
-  token_service -->|"2. Emite access token para el principal"| app
-  app -->|"3. HTTPS + Bearer token"| search_endpoint
-  search_endpoint -->|"4. Autentica token"| token_service
-  search_endpoint -->|"5. Autoriza principal"| role_assignment
+  terraform --> search_service
+  terraform --> role_assignment
+  managed_identity -.->|"No participa en las peticiones a Search"| search_service
 
-  terraform -->|"Crea"| search_service
-  terraform -->|"Declara principal + rol + scope"| role_assignment
-  service_principal -->|"Principal ID"| role_assignment
-  role --> role_assignment
-  scope --> role_assignment
-  scope --> search_service
-
-  search_service --> search_endpoint
-  role_assignment -->|"Permite operaciones de datos"| documents
-  role_assignment -.->|"No concede administración de objetos"| definitions
-  search_identity -.->|"No participa en este flujo de entrada"| search_service
-  keys_disabled -.-> search_endpoint
-
-  classDef terraformNode fill:#f3e8ff,stroke:#7e22ce,color:#3b0764
-  classDef workloadNode fill:#e8f1ff,stroke:#2563eb,color:#172554
-  classDef identity fill:#eef2ff,stroke:#4f46e5,color:#312e81
+  classDef userNode fill:#eef2ff,stroke:#4f46e5,color:#312e81
   classDef security fill:#fff7d6,stroke:#b7791f,color:#5f370e
   classDef azureResource fill:#e6f7ff,stroke:#0078d4,color:#003b5c
-  classDef allowed fill:#ecfdf5,stroke:#059669,color:#064e3b
-  classDef denied fill:#fef2f2,stroke:#dc2626,color:#7f1d1d,stroke-dasharray: 5 5
+  classDef workloadNode fill:#e8f1ff,stroke:#2563eb,color:#172554
+  classDef terraformNode fill:#f3e8ff,stroke:#7e22ce,color:#3b0764
 
-  class terraform terraformNode
+  class user,group,frontend_app,api_app userNode
+  class access_token,obo,role_assignment security
+  class search_service,documents azureResource
   class app,managed_identity workloadNode
-  class service_principal,token_service,search_identity identity
-  class role_assignment,role,scope,keys_disabled security
-  class search_service,search_endpoint azureResource
-  class documents allowed
-  class definitions denied
+  class terraform terraformNode

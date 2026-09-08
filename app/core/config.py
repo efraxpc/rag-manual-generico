@@ -1,7 +1,8 @@
 from functools import lru_cache
 from typing import Self
+from uuid import UUID
 
-from pydantic import Field, HttpUrl, model_validator
+from pydantic import Field, HttpUrl, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -19,6 +20,10 @@ class Settings(BaseSettings):
     azure_search_text_index_name: str | None = Field(default=None, min_length=1)
     azure_search_vector_dimensions: int | None = Field(default=None, ge=1)
     azure_managed_identity_client_id: str | None = Field(default=None, min_length=1)
+    entra_tenant_id: UUID | None = None
+    entra_api_client_id: UUID | None = None
+    entra_api_client_secret: SecretStr | None = Field(default=None, min_length=1)
+    entra_frontend_client_id: UUID | None = None
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -53,6 +58,33 @@ class Settings(BaseSettings):
             and self.azure_search_text_index_name == self.azure_search_index_name
         ):
             raise ValueError("Los índices textual y vectorial deben ser distintos.")
+        return self
+
+    @property
+    def entra_configured(self) -> bool:
+        return self.entra_tenant_id is not None
+
+    @model_validator(mode="after")
+    def validate_entra_configuration(self) -> Self:
+        values = (
+            self.entra_tenant_id,
+            self.entra_api_client_id,
+            self.entra_api_client_secret,
+            self.entra_frontend_client_id,
+        )
+        if any(value is not None for value in values) and not all(
+            value is not None for value in values
+        ):
+            raise ValueError(
+                "Configura conjuntamente las cuatro variables APP_ENTRA_*."
+            )
+        if (
+            self.entra_configured
+            and self.entra_api_client_id == self.entra_frontend_client_id
+        ):
+            raise ValueError(
+                "Usa registros de aplicación distintos para API y frontend."
+            )
         return self
 
 

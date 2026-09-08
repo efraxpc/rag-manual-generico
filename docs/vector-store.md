@@ -12,8 +12,8 @@ Search mediante el contrato `VectorStore`. El diagrama está en
 - `app/services/query.py`: solicita la recuperación de chunks.
 - `app/integrations/azure_search.py`: adapta documentos y consultas al SDK,
   normaliza resultados y convierte fallos del proveedor en errores controlados.
-- `app/core/resources.py`: construye el cliente y la credencial una vez durante
-  el arranque y los cierra al apagar la aplicación.
+- `app/core/resources.py`: crea una credencial On-Behalf-Of y un cliente por
+  petición, usando la identidad del usuario, y los cierra al terminar.
 - `app/api/dependencies.py`: inyecta el contrato en los servicios con FastAPI.
 
 Los endpoints son funciones síncronas: FastAPI ejecuta las operaciones del SDK
@@ -43,27 +43,12 @@ sin configurar nombre ni dimensiones vectoriales. Si no se configura el almacén
 vectorial, la API y `/api/v1/health` siguen funcionando; sus operaciones devuelven
 `503` con código `vector_store_not_configured`.
 
-Se utiliza `DefaultAzureCredential`, sin claves API. En desarrollo puede usar
-la sesión de `az login`. El principal local necesita permisos sobre los datos
-del índice; el rol asignado a la identidad de Container Apps no se transfiere
-automáticamente al usuario local.
-
-En Container Apps, Terraform asigna la identidad administrada a la aplicación
-y configura `APP_AZURE_MANAGED_IDENTITY_CLIENT_ID` con su **client ID**. También
-declara el rol `Search Index Data Contributor` sobre el servicio de AI Search
-para cargar y consultar chunks. Puedes obtener sus identificadores con los
-outputs `container_app_identity_client_id` y
-`container_app_identity_principal_id`; el primero selecciona la identidad en el
-SDK y el segundo identifica al principal en RBAC.
-
-Las tres variables `APP_AZURE_SEARCH_*` anteriores aún deben incorporarse a la
-configuración del despliegue cuando se habilite el RAG. La identidad administrada
-se utiliza desde el recurso Azure al que está asignada; configurar su client ID
-en un equipo local no permite autenticarse como esa identidad.
-
-Esta autenticación identifica a la API ante Azure AI Search. No implementa
-autenticación de usuarios en los endpoints HTTP; ese control de acceso sigue
-pendiente antes de exponer las nuevas operaciones a usuarios externos.
+Los endpoints de documentos y consultas requieren un token de acceso para esta
+API. FastAPI valida firma, emisor, audiencia, tenant, aplicación cliente y scope,
+y usa `OnBehalfOfCredential` para solicitar un token de Search en nombre del
+usuario. Cada usuario necesita el rol de datos correspondiente. No existe una
+alternativa con la identidad del backend. Consulta la
+[guía de autenticación](entra-auth.md).
 
 ## Índice requerido
 
@@ -97,6 +82,7 @@ como `Search Service Contributor`; el rol de datos de la API no basta.
 
 ```bash
 curl -X POST http://localhost:8000/api/v1/documents/chunks \
+  -H 'Authorization: Bearer <token-para-la-api>' \
   -H 'Content-Type: application/json' \
   -d '{
     "chunks": [{
@@ -130,6 +116,7 @@ antiguos que ya no aparezcan en el nuevo lote no se eliminan automáticamente.
 
 ```bash
 curl -X POST http://localhost:8000/api/v1/queries/search \
+  -H 'Authorization: Bearer <token-para-la-api>' \
   -H 'Content-Type: application/json' \
   -d '{
     "embedding": [0.1, 0.2, 0.3],
@@ -167,4 +154,4 @@ Un error de acceso al proveedor devuelve `503` con código
 
 - [Cliente Python de Azure AI Search](https://learn.microsoft.com/en-us/python/api/azure-search-documents/azure.search.documents.searchclient?view=azure-python).
 - [Acceso a Azure AI Search mediante roles](https://learn.microsoft.com/en-us/azure/search/search-security-rbac).
-- [DefaultAzureCredential](https://learn.microsoft.com/en-us/python/api/azure-identity/azure.identity.defaultazurecredential?view=azure-python).
+- [Flujo On-Behalf-Of](https://learn.microsoft.com/en-us/entra/identity-platform/v2-oauth2-on-behalf-of-flow).

@@ -40,13 +40,12 @@ flowchart TB
   environment -->|"Logs del entorno y contenedores"| logs
 
   app_identity -->|"RBAC: AcrPull · alcance ACR"| acr
-  app_identity -->|"RBAC: Search Index Data Contributor · alcance servicio"| search
+  entra_users["<b>Grupo de usuarios Entra</b><br/>Acceso delegado mediante OBO"]
+  entra_users -->|"RBAC: Search Index Data Contributor · alcance servicio"| search
   search ---|"Identidad propia"| search_identity
   deployer -->|"RBAC: Key Vault Secrets Officer · opcional · alcance vault"| vault
 
-  %% El permiso está declarado, pero el despliegue aún no configura las tres
-  %% variables APP_AZURE_SEARCH_*. El índice se prepara fuera de Terraform.
-  api -.->|"Carga y consulta de chunks: pendiente habilitar RAG"| search
+  api -.->|"Token delegado del usuario · On-Behalf-Of"| search
 
   classDef azureService fill:#e6f7ff,stroke:#0078d4,stroke-width:3px,color:#003b5c
   classDef external fill:#f3f4f6,stroke:#6b7280,color:#111827
@@ -54,7 +53,7 @@ flowchart TB
   classDef tooling fill:#f3e8ff,stroke:#7e22ce,color:#3b0764
 
   class acr,api,logs,search,vault azureService
-  class client external
+  class client,entra_users external
   class deployer,app_identity,search_identity identity
   class terraform,state tooling
   style environment fill:#eff6ff,stroke:#0078d4,stroke-width:3px,color:#003b5c

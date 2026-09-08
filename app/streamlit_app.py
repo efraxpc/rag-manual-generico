@@ -14,6 +14,7 @@ from pydantic import ValidationError
 from app.core.config import get_settings
 from app.schemas.documents import UploadDocumentResponse
 from app.services.file_ingestion import MAX_UPLOAD_BYTES
+from app.ui_auth import require_login
 
 SUPPORTED_FILE_TYPES = ["pdf", "txt", "md"]
 
@@ -26,7 +27,15 @@ class DocumentUploadError(RuntimeError):
     """Error de carga que se puede mostrar en la interfaz."""
 
 
-def upload_document(api_url: str, filename: str, data: bytes) -> UploadDocumentResponse:
+class SessionExpiredError(DocumentUploadError):
+    """La API solicita renovar el inicio de sesión."""
+
+
+def upload_document(
+    api_url: str, filename: str, data: bytes, *, access_token: str
+) -> UploadDocumentResponse:
+    if not access_token:
+        raise SessionExpiredError("Inicia sesión con Microsoft para cargar archivos.")
     if len(data) > MAX_UPLOAD_BYTES:
         raise DocumentUploadError("El archivo supera el límite de 10 MiB.")
     url = f"{api_url.strip().rstrip('/')}/api/v1/documents/upload"
@@ -34,12 +43,16 @@ def upload_document(api_url: str, filename: str, data: bytes) -> UploadDocumentR
         response = httpx.post(
             url,
             files={"file": (filename, data, "application/octet-stream")},
+            headers={"Authorization": f"Bearer {access_token}"},
             timeout=httpx.Timeout(120, connect=5),
+            follow_redirects=False,
         )
     except (httpx.HTTPError, httpx.InvalidURL) as exc:
         raise DocumentUploadError(
             "No se pudo completar la carga. Puedes reintentar con el mismo archivo."
         ) from exc
+    if response.status_code == 401:
+        raise SessionExpiredError("Tu sesión caducó. Vuelve a iniciar sesión.")
     try:
         payload = response.json()
     except ValueError as exc:
@@ -90,11 +103,8 @@ def render_sidebar() -> tuple[Any, str]:
     """Muestra la configuración y devuelve el manual seleccionado."""
     with st.sidebar:
         st.header("Configuración")
-        api_url = st.text_input(
-            "URL de la API",
-            value=get_settings().api_base_url,
-            help="Dirección base del servicio FastAPI.",
-        )
+        # El destino del token lo fija el despliegue, no un campo editable del usuario.
+        api_url = get_settings().api_base_url
 
         if st.button("Actualizar estado", use_container_width=True):
             fetch_api_health.clear()
@@ -121,7 +131,7 @@ def render_sidebar() -> tuple[Any, str]:
     return manual, api_url
 
 
-def render_document_upload(manual: Any, api_url: str) -> None:
+def render_document_upload(manual: Any, api_url: str, access_token: str) -> None:
     """Solo envía archivos al pulsar el botón, nunca durante un rerun."""
     selection = (api_url.strip().rstrip("/"), manual.name, manual.file_id)
     if st.session_state.get("upload_selection") != selection:
@@ -131,11 +141,21 @@ def render_document_upload(manual: Any, api_url: str) -> None:
         st.session_state.pop("upload_result", None)
         with st.spinner("Procesando y guardando fragmentos…"):
             try:
-                result = upload_document(api_url, manual.name, manual.getvalue())
+                result = upload_document(
+                    api_url, manual.name, manual.getvalue(), access_token=access_token
+                )
+            except SessionExpiredError:
+                st.session_state["session_expired"] = True
             except DocumentUploadError as exc:
                 st.error(str(exc))
             else:
                 st.session_state["upload_result"] = result.model_dump()
+    if st.session_state.get("session_expired"):
+        st.warning("Tu sesión caducó. Vuelve a iniciar sesión para continuar.")
+        if st.button("Renovar sesión"):
+            st.session_state.clear()
+            st.logout()
+        return
     result = st.session_state.get("upload_result")
     if result:
         st.success(f"Se guardaron {result['indexed_chunks']} fragmentos del archivo.")
@@ -151,6 +171,10 @@ def render_app() -> None:
         layout="centered",
     )
 
+    access_token = require_login()
+    if access_token is None:
+        return
+
     manual, api_url = render_sidebar()
 
     st.title("📚 RAG Manual")
@@ -162,7 +186,7 @@ def render_app() -> None:
         st.info("Carga un manual desde la barra lateral para comenzar.")
     else:
         st.write(f"Manual seleccionado: **{manual.name}**")
-        render_document_upload(manual, api_url)
+        render_document_upload(manual, api_url, access_token)
 
     st.subheader("Haz una pregunta")
     with st.form("question_form"):

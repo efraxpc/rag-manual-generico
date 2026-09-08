@@ -30,6 +30,15 @@ container_app_max_replicas = 3
 # Azure AI Search. null genera un nombre global estable para la suscripción.
 search_service_name = null
 search_service_sku  = "free"
+# Grupo cuyos usuarios accederán a Search mediante On-Behalf-Of.
+# Usa el Object ID del grupo, no su nombre ni el Object ID de un usuario.
+search_user_group_object_id = null
+
+# Autenticación delegada. Mantén null hasta crear los dos registros de aplicación.
+# Pasa el secreto mediante TF_VAR_entra_api_client_secret para no escribirlo aquí.
+entra_tenant_id         = null
+entra_api_client_id     = null
+entra_frontend_client_id = null
 
 # Agrega las IP públicas autorizadas como rangos /32 o CIDR corporativos.
 # Con la lista vacía, el plano de datos permanece bloqueado desde Internet.

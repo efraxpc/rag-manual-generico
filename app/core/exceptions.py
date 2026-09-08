@@ -20,11 +20,13 @@ class ApplicationError(Exception):
         status_code: int = 400,
         code: str = "application_error",
         details: Any | None = None,
+        headers: dict[str, str] | None = None,
     ) -> None:
         self.message = message
         self.status_code = status_code
         self.code = code
         self.details = details
+        self.headers = headers
         super().__init__(message)
 
 
@@ -60,6 +62,16 @@ class TextStoreUnavailableError(ApplicationError):
         )
 
 
+class SearchAccessDeniedError(ApplicationError):
+    def __init__(self) -> None:
+        super().__init__(
+            "Tu usuario no tiene permisos para esta operación en Azure AI Search. "
+            "Para cargar documentos necesitas Search Index Data Contributor.",
+            status_code=403,
+            code="search_access_denied",
+        )
+
+
 async def application_error_handler(
     request: Request, exc: ApplicationError
 ) -> JSONResponse:
@@ -77,6 +89,7 @@ async def application_error_handler(
     )
     return JSONResponse(
         status_code=exc.status_code,
+        headers=exc.headers,
         content={
             "error": {
                 "code": exc.code,
