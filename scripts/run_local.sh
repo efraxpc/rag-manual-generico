@@ -6,13 +6,16 @@ PROJECT_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 PYTHON_BIN="${RAG_PYTHON_BIN:-${PROJECT_ROOT}/.venv/bin/python}"
 API_HOST="${RAG_API_HOST:-127.0.0.1}"
 API_PORT="${RAG_API_PORT:-8000}"
-UI_HOST="${RAG_UI_HOST:-127.0.0.1}"
+# Usa el mismo host que el redirect_uri OIDC. Para el navegador, localhost y
+# 127.0.0.1 tienen almacenes de cookies distintos.
+UI_HOST="${RAG_UI_HOST:-localhost}"
 UI_PORT="${RAG_UI_PORT:-8501}"
 PID_FILE="${RAG_RUN_LOCAL_PID_FILE:-${PROJECT_ROOT}/.run_local.pid}"
 ACTION="${1:-start}"
 API_PID=""
 UI_PID=""
 RESTART_REQUESTED=0
+STOP_GRACE_ATTEMPTS=20
 
 usage() {
     printf 'Uso: %s [start|restart]\n' "${0##*/}"
@@ -68,28 +71,81 @@ legacy_launcher_pids() {
 
 stop_legacy_launchers() {
     local pid
-    local identity
-    local attempt
-    local state
 
     while read -r pid; do
-        identity="$(process_identity "${pid}")" || continue
-        printf 'Deteniendo instancia anterior de run_local.sh (PID %s)...\n' \
-            "${pid}"
-        kill -TERM "${pid}" 2>/dev/null || continue
-        for ((attempt = 1; attempt <= 60; attempt++)); do
-            [[ "$(process_identity "${pid}" || true)" == "${identity}" ]] \
-                || break
-            state="$(ps -p "${pid}" -o stat= 2>/dev/null)" || break
-            [[ "${state}" != Z* ]] || break
-            sleep 0.25
-        done
-        if ((attempt > 60)); then
-            printf 'La instancia anterior (PID %s) no terminó a tiempo.\n' \
-                "${pid}" >&2
-            return 1
-        fi
+        stop_launcher "${pid}" "instancia anterior de run_local.sh" || return 1
     done < <(legacy_launcher_pids)
+}
+
+process_is_running() {
+    local identity=$2
+    local pid=$1
+    local state
+
+    [[ "$(process_identity "${pid}" || true)" == "${identity}" ]] || return 1
+    state="$(ps -p "${pid}" -o stat= 2>/dev/null)" || return 1
+    [[ "${state}" != Z* ]]
+}
+
+wait_for_process_exit() {
+    local identity=$2
+    local pid=$1
+    local attempt
+
+    for ((attempt = 1; attempt <= STOP_GRACE_ATTEMPTS; attempt++)); do
+        process_is_running "${pid}" "${identity}" || return 0
+        sleep 0.1
+    done
+
+    ! process_is_running "${pid}" "${identity}"
+}
+
+descendant_pids() {
+    local parent=$1
+    local pid
+    local ppid
+    local index
+    local -a descendants=()
+    local -a parents=("${parent}")
+    local -a process_table=()
+
+    mapfile -t process_table < <(ps -u "${UID}" -o pid=,ppid=)
+    for ((index = 0; index < ${#parents[@]}; index++)); do
+        while read -r pid ppid; do
+            [[ "${ppid}" == "${parents[index]}" ]] || continue
+            descendants+=("${pid}")
+            parents+=("${pid}")
+        done < <(printf '%s\n' "${process_table[@]}")
+    done
+
+    ((${#descendants[@]} == 0)) || printf '%s\n' "${descendants[@]}"
+}
+
+stop_launcher() {
+    local pid=$1
+    local description=$2
+    local identity
+    local -a descendants=()
+
+    identity="$(process_identity "${pid}")" || return 0
+    printf 'Deteniendo %s (PID %s)...\n' "${description}" "${pid}"
+    kill -TERM "${pid}" 2>/dev/null || return 0
+    if wait_for_process_exit "${pid}" "${identity}"; then
+        return 0
+    fi
+
+    mapfile -t descendants < <(descendant_pids "${pid}")
+    printf 'Forzando la detención de %s (PID %s)...\n' \
+        "${description}" "${pid}"
+    ((${#descendants[@]} == 0)) \
+        || kill -KILL "${descendants[@]}" 2>/dev/null \
+        || true
+    kill -KILL "${pid}" 2>/dev/null || true
+    if ! wait_for_process_exit "${pid}" "${identity}"; then
+        printf 'No se pudo detener %s (PID %s).\n' \
+            "${description}" "${pid}" >&2
+        return 1
+    fi
 }
 
 registered_pid() {
@@ -291,12 +347,12 @@ case "${ACTION}" in
         ;;
     restart)
         if active_pid="$(registered_pid)"; then
-            if kill -USR1 "${active_pid}" 2>/dev/null; then
-                printf 'Solicitud de reinicio enviada (PID %s).\n' "${active_pid}"
-                exit 0
-            fi
+            stop_launcher "${active_pid}" "la instancia activa" || exit 1
+            printf 'Instancia anterior detenida; iniciando una nueva.\n'
+        else
+            printf 'No hay una instancia registrada; comprobando instancias anteriores.\n'
         fi
-        printf 'No hay una instancia registrada; comprobando instancias anteriores.\n'
+        stop_legacy_launchers || exit 1
         ;;
     -h | --help)
         usage
@@ -324,10 +380,6 @@ cd "${PROJECT_ROOT}"
 export APP_API_BASE_URL="${APP_API_BASE_URL:-http://${API_HOST}:${API_PORT}}"
 API_HEALTH_URL="$(health_url "${API_HOST}" "${API_PORT}" /api/v1/health)"
 UI_HEALTH_URL="$(health_url "${UI_HOST}" "${UI_PORT}" /_stcore/health)"
-
-if [[ "${ACTION}" == restart ]] && ! stop_legacy_launchers; then
-    exit 1
-fi
 
 trap cleanup EXIT
 trap 'exit 129' HUP

@@ -13,6 +13,7 @@ from pydantic import ValidationError
 
 from app.core.config import get_settings
 from app.schemas.documents import UploadDocumentResponse
+from app.schemas.queries import RagAnswerResponse
 from app.services.file_ingestion import MAX_UPLOAD_BYTES
 from app.ui_auth import require_login
 
@@ -29,6 +30,14 @@ class DocumentUploadError(RuntimeError):
 
 class SessionExpiredError(DocumentUploadError):
     """La API solicita renovar el inicio de sesión."""
+
+
+class QuestionError(RuntimeError):
+    """Error de consulta que se puede mostrar en la interfaz."""
+
+
+class QuestionSessionExpiredError(QuestionError):
+    """La consulta requiere renovar el inicio de sesión."""
 
 
 def upload_document(
@@ -67,6 +76,46 @@ def upload_document(
         return UploadDocumentResponse.model_validate(payload)
     except ValidationError as exc:
         raise DocumentUploadError("La API devolvió una respuesta no válida.") from exc
+
+
+def ask_question(
+    api_url: str,
+    question: str,
+    *,
+    access_token: str,
+    document_id: str,
+) -> RagAnswerResponse:
+    if not access_token:
+        raise QuestionSessionExpiredError(
+            "Inicia sesión con Microsoft para consultar manuales."
+        )
+    url = f"{api_url.strip().rstrip('/')}/api/v1/queries/answer"
+    try:
+        response = httpx.post(
+            url,
+            json={"question": question, "document_id": document_id, "top_k": 5},
+            headers={"Authorization": f"Bearer {access_token}"},
+            timeout=httpx.Timeout(90, connect=5),
+            follow_redirects=False,
+        )
+    except (httpx.HTTPError, httpx.InvalidURL) as exc:
+        raise QuestionError("No se pudo completar la consulta.") from exc
+    if response.status_code == 401:
+        raise QuestionSessionExpiredError("Tu sesión caducó. Vuelve a iniciar sesión.")
+    try:
+        payload = response.json()
+    except ValueError as exc:
+        raise QuestionError("La API devolvió una respuesta no válida.") from exc
+    if response.is_error:
+        error = payload.get("error", {}) if isinstance(payload, dict) else {}
+        message = error.get("message") if isinstance(error, dict) else None
+        raise QuestionError(
+            message if isinstance(message, str) else "La API rechazó la consulta."
+        )
+    try:
+        return RagAnswerResponse.model_validate(payload)
+    except ValidationError as exc:
+        raise QuestionError("La API devolvió una respuesta no válida.") from exc
 
 
 def build_health_url(api_url: str) -> str:
@@ -137,6 +186,8 @@ def render_document_upload(manual: Any, api_url: str, access_token: str) -> None
     if st.session_state.get("upload_selection") != selection:
         st.session_state["upload_selection"] = selection
         st.session_state.pop("upload_result", None)
+        st.session_state.pop("last_question", None)
+        st.session_state.pop("last_answer", None)
     if st.button("Procesar y guardar", type="primary"):
         st.session_state.pop("upload_result", None)
         with st.spinner("Procesando y guardando fragmentos…"):
@@ -189,18 +240,19 @@ def render_app() -> None:
         render_document_upload(manual, api_url, access_token)
 
     st.subheader("Haz una pregunta")
+    upload_result = st.session_state.get("upload_result")
     with st.form("question_form"):
         question = st.text_area(
             "Pregunta",
             placeholder="Por ejemplo: ¿Cómo realizo el mantenimiento preventivo?",
             height=120,
-            disabled=manual is None,
+            disabled=upload_result is None,
         )
         submitted = st.form_submit_button(
             "Consultar",
             type="primary",
             use_container_width=True,
-            disabled=manual is None,
+            disabled=upload_result is None,
         )
 
     if submitted:
@@ -208,15 +260,30 @@ def render_app() -> None:
             st.warning("Escribe una pregunta antes de continuar.")
         else:
             st.session_state["last_question"] = question.strip()
-            st.info(
-                "La consulta está preparada. La búsqueda sobre estos fragmentos "
-                "y la generación de respuestas todavía están pendientes."
-            )
+            st.session_state.pop("last_answer", None)
+            with st.spinner("Buscando en el manual y generando la respuesta…"):
+                try:
+                    result = ask_question(
+                        api_url,
+                        question.strip(),
+                        access_token=access_token,
+                        document_id=upload_result["document_id"],
+                    )
+                except QuestionSessionExpiredError:
+                    st.session_state["session_expired"] = True
+                    st.warning("Tu sesión caducó. Vuelve a iniciar sesión.")
+                except QuestionError as exc:
+                    st.error(str(exc))
+                else:
+                    st.session_state["last_answer"] = result.model_dump()
 
     last_question = st.session_state.get("last_question")
     if last_question:
         st.caption("Consulta más reciente")
         st.markdown(f"> {last_question}")
+    last_answer = st.session_state.get("last_answer")
+    if last_answer:
+        st.markdown(last_answer["answer"])
 
 
 if __name__ == "__main__":

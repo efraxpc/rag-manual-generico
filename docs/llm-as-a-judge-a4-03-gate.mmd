@@ -1,0 +1,42 @@
+%%{init: {"flowchart": {"curve": "linear", "nodeSpacing": 22, "rankSpacing": 30}, "themeVariables": {"fontSize": "17px"}}}%%
+flowchart TB
+  %% Lámina 3 de 4. Formato vertical para impresión A4.
+
+  title["<b>Quality gate RAG · 3/4</b><br/>LLM-as-a-judge"]
+  cases[("<b>Desde la lámina 2</b><br/>Casos generados por el candidato")]
+  select["Seleccionar el siguiente caso"]
+  prompt["Prompt <code>rag-judge-v1</code><br/>Sin conocimiento externo<br/>Contenido tratado como datos"]
+  rubric["Puntuaciones 1..5<br/>groundedness · relevance<br/>completeness · citation_quality"]
+  schema["Structured Output estricto<br/>Esquema <code>JudgeAssessment</code>"]
+  judge["Azure OpenAI<br/>Deployment juez independiente"]
+  validate["Validación Pydantic local<br/>Scores, razones y hallazgos"]
+  valid{"¿Respuesta válida?"}
+  gate{"Gate calculado en Python<br/>¿nota mínima ≥ umbral<br/>Y unsupported_claims vacío?"}
+  result["Guardar resultado del caso<br/><code>case_id</code> · <code>passed</code> · evaluación"]
+  more{"¿Quedan casos?"}
+  error["Código 2<br/>Error técnico: bloquea el pipeline"]
+  handoff["<b>Continúa en la lámina 4</b><br/>Resultados de todos los casos"]
+
+  title --> cases --> select --> prompt
+  prompt --> rubric --> schema --> judge --> validate --> valid
+  judge -. "Error Azure" .-> error
+  valid -->|"No"| error
+  valid -->|"Sí"| gate --> result --> more
+  more -->|"Sí"| select
+  more -->|"No"| handoff
+
+  classDef titleStyle fill:#172554,stroke:#172554,color:#ffffff
+  classDef inputStyle fill:#ecfdf5,stroke:#059669,stroke-width:2px,color:#064e3b
+  classDef handoffStyle fill:#e6f7ff,stroke:#0078d4,stroke-width:3px,color:#003b5c
+  classDef localStyle fill:#e8f1ff,stroke:#2563eb,stroke-width:2px,color:#172554
+  classDef judgeStyle fill:#f3e8ff,stroke:#7e22ce,stroke-width:3px,color:#3b0764
+  classDef decisionStyle fill:#fff7d6,stroke:#b7791f,stroke-width:2px,color:#5f370e
+  classDef failStyle fill:#fee2e2,stroke:#dc2626,stroke-width:3px,color:#7f1d1d
+
+  class title titleStyle
+  class cases inputStyle
+  class handoff handoffStyle
+  class select,prompt,schema,validate,result localStyle
+  class rubric,judge judgeStyle
+  class valid,gate,more decisionStyle
+  class error failStyle

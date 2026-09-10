@@ -1,0 +1,127 @@
+flowchart TB
+  %% Arquitectura objetivo para evolucionar rag-manual-generico a un RAG
+  %% completo en Azure. Q = flujo de consulta, I = flujo de ingesta.
+  %% En esta propuesta, la API valida al usuario de Entra y aplica filtros ACL;
+  %% las identidades del backend acceden a Search con mínimo privilegio.
+
+  users["Usuarios y administradores de contenido"]
+
+  subgraph access["Acceso"]
+    front_door["<b>Azure Front Door + WAF</b><br/>TLS, dominio y protección perimetral"]
+    entra["<b>Microsoft Entra ID</b><br/>Inicio de sesión, grupos y roles de aplicación"]
+  end
+
+  subgraph apps["Azure Container Apps Environment"]
+    ui["<b>Container App: interfaz</b><br/>Streamlit"]
+    api["<b>Container App: API RAG</b><br/>FastAPI<br/>Autorización, orquestación y citas"]
+    ingestion["<b>Container Apps Job: ingesta</b><br/>Extracción, chunking y enriquecimiento<br/>Escalado dirigido por eventos"]
+    api_identity["Identidad administrada de API<br/>Permisos de lectura"]
+    ingestion_identity["Identidad administrada de ingesta<br/>Permisos de escritura"]
+  end
+
+  subgraph data["Datos y recuperación"]
+    blob[("<b>Azure Blob Storage</b><br/>Documentos originales y estado de ingesta")]
+    queue[["<b>Azure Service Bus</b><br/>Cola de trabajos, reintentos y DLQ"]]
+    search[("<b>Azure AI Search</b><br/>Índice: texto + vectores + metadatos + ACL<br/>Búsqueda híbrida y semantic ranker")]
+  end
+
+  subgraph ai["Servicios de IA"]
+    document_intelligence["<b>Azure AI Document Intelligence</b><br/>OCR, tablas y estructura"]
+    embeddings["<b>Microsoft Foundry / Azure OpenAI</b><br/>Despliegue de embeddings"]
+    llm["<b>Microsoft Foundry / Azure OpenAI</b><br/>Despliegue de modelo de chat"]
+    safety["<b>Azure AI Content Safety</b><br/>Filtros de entrada y salida"]
+  end
+
+  subgraph platform["Plataforma, seguridad y operación"]
+    acr[("<b>Azure Container Registry</b><br/>Imágenes versionadas")]
+    key_vault["<b>Azure Key Vault</b><br/>Secretos externos y certificados"]
+    monitor["<b>Application Insights + Log Analytics</b><br/>Trazas, métricas, logs y alertas"]
+    private_network["<b>VNet + Private Endpoints</b><br/>Recomendado para producción"]
+  end
+
+  subgraph delivery["Entrega e infraestructura como código"]
+    repository["Repositorio Git"]
+    pipeline["CI/CD<br/>Pruebas, build, escaneo y despliegue"]
+    terraform["Terraform<br/>Recursos, red, RBAC y configuración"]
+  end
+
+  %% Flujo de acceso y consulta.
+  users -->|"HTTPS"| front_door
+  users <-->|"Autenticación OIDC/OAuth 2.0"| entra
+  front_door -->|"Q1. Abrir aplicación"| ui
+  ui -->|"Q2. Pregunta + access token"| api
+  api -->|"Q3. Vectorizar pregunta"| embeddings
+  embeddings -->|"Vector de consulta"| api
+  api -->|"Q4. Consulta híbrida, filtros ACL y top-k"| search
+  search -->|"Q5. Fragmentos relevantes + metadatos"| api
+  api -->|"Q6. Instrucciones + pregunta + contexto"| llm
+  llm -->|"Respuesta fundamentada"| api
+  api -->|"Q7. Respuesta + citas de origen"| ui
+  api <-->|"Validación de contenido"| safety
+
+  %% Flujo asíncrono de ingesta.
+  ui -->|"I1. Cargar PDF, TXT o Markdown"| api
+  api -->|"I2. Guardar original"| blob
+  api -->|"I3. Publicar trabajo con document_id"| queue
+  queue -->|"I4. Activar trabajo"| ingestion
+  ingestion -->|"I5. Leer documento"| blob
+  ingestion -->|"I6. Extraer u obtener OCR"| document_intelligence
+  document_intelligence -->|"Texto y estructura"| ingestion
+  ingestion -->|"I7. Vectorizar chunks por lotes"| embeddings
+  embeddings -->|"Vectores"| ingestion
+  ingestion -->|"I8. Indexar chunks, vectores, ACL y origen"| search
+  ingestion -->|"I9. Actualizar estado"| blob
+
+  %% Identidad y mínimo privilegio.
+  api --- api_identity
+  ingestion --- ingestion_identity
+  api_identity -. "RBAC: Search Index Data Reader" .-> search
+  api_identity -. "RBAC: Cognitive Services OpenAI User" .-> embeddings
+  api_identity -. "RBAC: Cognitive Services OpenAI User" .-> llm
+  ingestion_identity -. "RBAC: Blob Data Contributor" .-> blob
+  ingestion_identity -. "RBAC: Service Bus Data Receiver" .-> queue
+  ingestion_identity -. "RBAC: Search Index Data Contributor" .-> search
+  ingestion_identity -. "RBAC: Cognitive Services User" .-> document_intelligence
+  ingestion_identity -. "RBAC: Cognitive Services OpenAI User" .-> embeddings
+  api_identity -. "Lee referencias autorizadas" .-> key_vault
+  ingestion_identity -. "Lee referencias autorizadas" .-> key_vault
+
+  %% Operación y entrega.
+  acr -->|"Imágenes"| ui
+  acr -->|"Imágenes"| api
+  acr -->|"Imágenes"| ingestion
+  ui -. "Telemetría" .-> monitor
+  api -. "OpenTelemetry" .-> monitor
+  ingestion -. "Logs y métricas" .-> monitor
+  repository --> pipeline
+  pipeline -->|"Publicar imagen"| acr
+  pipeline -->|"Actualizar revisiones"| apps
+  terraform -->|"Aprovisionar"| access
+  terraform -->|"Aprovisionar"| apps
+  terraform -->|"Aprovisionar"| data
+  terraform -->|"Aprovisionar"| ai
+  terraform -->|"Aprovisionar"| platform
+  private_network -. "Acceso privado" .-> apps
+  private_network -. "Private Link" .-> blob
+  private_network -. "Private Link" .-> search
+  private_network -. "Private Link" .-> embeddings
+  private_network -. "Private Link" .-> llm
+  private_network -. "Private Link" .-> key_vault
+
+  classDef actor fill:#f3f4f6,stroke:#4b5563,color:#111827
+  classDef accessNode fill:#fff7d6,stroke:#b7791f,color:#5f370e
+  classDef appNode fill:#e8f1ff,stroke:#2563eb,stroke-width:2px,color:#172554
+  classDef identityNode fill:#eef2ff,stroke:#4f46e5,color:#312e81
+  classDef dataNode fill:#ecfdf5,stroke:#059669,stroke-width:2px,color:#064e3b
+  classDef aiNode fill:#f3e8ff,stroke:#7e22ce,stroke-width:2px,color:#3b0764
+  classDef opsNode fill:#e6f7ff,stroke:#0078d4,color:#003b5c
+  classDef deliveryNode fill:#fce7f3,stroke:#be185d,color:#831843
+
+  class users actor
+  class front_door,entra accessNode
+  class ui,api,ingestion appNode
+  class api_identity,ingestion_identity identityNode
+  class blob,queue,search dataNode
+  class document_intelligence,embeddings,llm,safety aiNode
+  class acr,key_vault,monitor,private_network opsNode
+  class repository,pipeline,terraform deliveryNode

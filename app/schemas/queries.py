@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 
-from app.rag.models import SearchHit, VectorQuery
+from app.rag.models import RagAnswer, SearchHit, TextQuery, VectorQuery
 
 
 class VectorSearchRequest(VectorQuery):
@@ -9,3 +9,11 @@ class VectorSearchRequest(VectorQuery):
 
 class VectorSearchResponse(BaseModel):
     matches: list[SearchHit]
+
+
+class RagAnswerRequest(TextQuery):
+    """Pregunta en lenguaje natural para el índice textual."""
+
+
+class RagAnswerResponse(RagAnswer):
+    """Respuesta fundamentada y contexto que la produjo."""

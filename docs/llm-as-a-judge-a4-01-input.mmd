@@ -1,0 +1,44 @@
+%%{init: {"flowchart": {"curve": "linear", "nodeSpacing": 22, "rankSpacing": 30}, "themeVariables": {"fontSize": "17px"}}}%%
+flowchart TB
+  %% Lámina 1 de 4. Formato vertical para impresión A4.
+
+  title["<b>Quality gate RAG · 1/4</b><br/>Tests, configuración y corpus"]
+  event["Pull request, push a main<br/>o ejecución manual"]
+  tests["Ejecutar calidad determinista<br/><code>pytest</code> · <code>ruff check</code><br/><code>ruff format --check</code>"]
+  tests_ok{"¿Tests y lint pasan?"}
+  stop_tests["Pipeline fallido<br/>No se despliega"]
+  pr{"¿Es pull request?"}
+  pr_end["Finaliza sin credenciales Azure<br/>La evaluación cloud corre en main"]
+
+  oidc["Autenticación OIDC del entorno<br/><code>evaluation</code>"]
+  config["Configuración de evaluación<br/>Índice textual exclusivo<br/>Deployment generador + juez"]
+  scenarios[("Escenarios versionados<br/>pregunta · respuesta esperada<br/>fuentes · documento · top_k")]
+  corpus[("Corpus versionado<br/><code>evaluations/corpus</code>")]
+  seed["Extraer, dividir e indexar corpus<br/>Obtener <code>document_id</code> estable"]
+  handoff["<b>Continúa en la lámina 2</b><br/>Escenarios + documentos sembrados"]
+
+  title --> event --> tests --> tests_ok
+  tests_ok -->|"No"| stop_tests
+  tests_ok -->|"Sí"| pr
+  pr -->|"Sí"| pr_end
+  pr -->|"No"| oidc --> config
+  config --> scenarios
+  config --> corpus
+  corpus --> seed
+  scenarios --> seed --> handoff
+
+  classDef titleStyle fill:#172554,stroke:#172554,color:#ffffff
+  classDef actorStyle fill:#f3f4f6,stroke:#4b5563,color:#111827
+  classDef inputStyle fill:#ecfdf5,stroke:#059669,stroke-width:2px,color:#064e3b
+  classDef localStyle fill:#e8f1ff,stroke:#2563eb,stroke-width:2px,color:#172554
+  classDef decisionStyle fill:#fff7d6,stroke:#b7791f,stroke-width:2px,color:#5f370e
+  classDef stopStyle fill:#fee2e2,stroke:#dc2626,stroke-width:3px,color:#7f1d1d
+  classDef handoffStyle fill:#e6f7ff,stroke:#0078d4,stroke-width:3px,color:#003b5c
+
+  class title titleStyle
+  class event,pr_end actorStyle
+  class scenarios,corpus inputStyle
+  class tests,oidc,config,seed localStyle
+  class tests_ok,pr decisionStyle
+  class stop_tests stopStyle
+  class handoff handoffStyle

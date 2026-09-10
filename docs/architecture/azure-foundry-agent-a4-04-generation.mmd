@@ -1,0 +1,62 @@
+%%{init: {"flowchart": {"curve": "linear", "nodeSpacing": 16, "rankSpacing": 22}, "themeVariables": {"fontSize": "11px"}}}%%
+flowchart TB
+  %% Lámina 4 de 8. Respuesta, aprobación y ejecución para A4 vertical.
+
+  title["<b>4/8 · Resolución</b><br/>Respuesta, aprobación humana y ejecución"]
+  azure_services["<b>Servicios · arquitectura objetivo</b><br/>Microsoft Foundry Agent Service · Azure OpenAI · Azure Container Apps<br/>Azure AI Content Safety · Azure Monitor/Application Insights"]
+  question["Pregunta y objetivo original"]
+  facts["Hechos operacionales<br/>con timestamp"]
+  context["Procedimientos recuperados<br/>con fuente, sección y página"]
+  instructions["Instrucciones del agente<br/>No inventar · citar · escalar"]
+  draft["Azure OpenAI<br/>Generar explicación y propuesta"]
+  grounded{"¿Afirmaciones y pasos<br/>tienen evidencia?"}
+  research["Volver a 3/8<br/>Buscar, aclarar o escalar"]
+  citations["Construir citas<br/>y separar hecho de recomendación"]
+  guardrails{"¿Cumple política, PII,<br/>seguridad y alcance?"}
+  blocked["No ejecutar<br/>Corregir o escalar a supervisor"]
+  action{"¿Implica escritura,<br/>compensación o compromiso?"}
+  informative["Respuesta informativa<br/>Texto + citas + confianza"]
+  approval["Aprobación humana explícita<br/>Resumen exacto de la acción"]
+  decision{"¿Aprobada sin<br/>modificaciones?"}
+  executor["FastAPI · Action Gateway<br/>Revalidar RBAC + idempotencia"]
+  airline[("Sistema operacional<br/>Crear o actualizar expediente")]
+  receipt["Respuesta final<br/>Citas + acción + comprobante"]
+
+  title --> azure_services
+  azure_services --> question
+  question --> draft
+  facts --> draft
+  context --> draft
+  instructions --> draft
+  draft --> grounded
+  grounded -->|"No"| research
+  grounded -->|"Sí"| citations
+  citations --> guardrails
+  guardrails -->|"No"| blocked
+  guardrails -->|"Sí"| action
+  action -->|"No"| informative
+  action -->|"Sí"| approval
+  approval --> decision
+  decision -->|"No"| blocked
+  decision -->|"Sí"| executor
+  executor --> airline
+  airline --> receipt
+
+  audit["Registrar versión del agente, fuentes,<br/>herramientas, aprobador, payload mínimo<br/>y resultado; nunca secretos ni PII innecesaria."]
+  audit -.-> executor
+
+  classDef titleNode fill:#172554,stroke:#172554,color:#ffffff
+  classDef input fill:#f3f4f6,stroke:#4b5563,color:#111827
+  classDef phase fill:#fff7d6,stroke:#b7791f,stroke-width:2px,color:#5f370e
+  classDef azure fill:#f3e8ff,stroke:#7e22ce,color:#3b0764
+  classDef result fill:#ecfdf5,stroke:#059669,stroke-width:2px,color:#064e3b
+  classDef warning fill:#fff1f2,stroke:#be123c,color:#881337
+  classDef serviceList fill:#e6f7ff,stroke:#0078d4,stroke-width:2px,color:#003b5c
+
+  class title titleNode
+  class azure_services serviceList
+  class question,facts,context,instructions input
+  class citations,approval,executor phase
+  class draft,airline azure
+  class informative,receipt result
+  class grounded,research,guardrails,blocked,action,decision,audit warning

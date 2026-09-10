@@ -1,0 +1,44 @@
+%%{init: {"flowchart": {"curve": "linear", "nodeSpacing": 22, "rankSpacing": 30}, "themeVariables": {"fontSize": "17px"}}}%%
+flowchart TB
+  %% Lámina 4 de 4. Formato vertical para impresión A4.
+
+  title["<b>Quality gate RAG · 4/4</b><br/>Reporte, bloqueo y despliegue"]
+  from_judge["<b>Desde la lámina 3</b><br/>Resultados de todos los casos"]
+  report["Generar <code>judge-report.json</code><br/>rúbrica · deployment · umbral<br/>pass rate · medias · razones"]
+  privacy["No copiar question · answer · context<br/>Conservar el reporte como evidencia sensible"]
+  failed{"¿Algún caso falló?"}
+
+  exit1["Código 1<br/>Fallo de calidad"]
+  blocked["Job <code>rag-quality-gate</code> fallido<br/><b>Deploy no se inicia</b>"]
+
+  exit0["Código 0<br/>Todos los casos pasan"]
+  dependency["GitHub Actions<br/><code>deploy needs: rag-quality-gate</code>"]
+  build["ACR Build<br/>Imagen inmutable con tag = commit SHA"]
+  deploy["Actualizar Azure Container App<br/>con la imagen aprobada"]
+  production["Nueva revisión en producción"]
+
+  technical["Código 2 en láminas 1–3<br/>También bloquea el despliegue"]
+
+  title --> from_judge --> report --> failed
+  report -.-> privacy
+  failed -->|"Sí"| exit1 --> blocked
+  technical --> blocked
+  failed -->|"No"| exit0 --> dependency --> build --> deploy --> production
+
+  classDef titleStyle fill:#172554,stroke:#172554,color:#ffffff
+  classDef inputStyle fill:#e6f7ff,stroke:#0078d4,stroke-width:3px,color:#003b5c
+  classDef localStyle fill:#e8f1ff,stroke:#2563eb,stroke-width:2px,color:#172554
+  classDef decisionStyle fill:#fff7d6,stroke:#b7791f,stroke-width:2px,color:#5f370e
+  classDef passStyle fill:#dcfce7,stroke:#16a34a,stroke-width:3px,color:#14532d
+  classDef failStyle fill:#fee2e2,stroke:#dc2626,stroke-width:3px,color:#7f1d1d
+  classDef noteStyle fill:#f3f4f6,stroke:#4b5563,color:#111827
+  classDef deployStyle fill:#f3e8ff,stroke:#7e22ce,stroke-width:3px,color:#3b0764
+
+  class title titleStyle
+  class from_judge inputStyle
+  class report,dependency localStyle
+  class failed decisionStyle
+  class exit0,production passStyle
+  class exit1,blocked,technical failStyle
+  class privacy noteStyle
+  class build,deploy deployStyle

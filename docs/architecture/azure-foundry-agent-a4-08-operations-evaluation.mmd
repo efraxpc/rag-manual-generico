@@ -1,0 +1,77 @@
+%%{init: {"flowchart": {"curve": "linear", "nodeSpacing": 14, "rankSpacing": 20}, "themeVariables": {"fontSize": "11px"}}}%%
+flowchart TB
+  %% Lámina 8 de 8. CI/CD, evaluación y observabilidad del caso de equipaje.
+
+  title["<b>8/8 · Operación</b><br/>Evaluación del agente y mejora controlada"]
+  azure_services["<b>Servicios · arquitectura objetivo</b><br/>Microsoft Foundry Agent Service + Evaluation<br/>Azure Container Registry · Azure Monitor/Application Insights<br/>Azure Monitor Logs / Log Analytics<br/><i>Herramientas: Terraform · Azure Developer CLI · OpenTelemetry</i>"]
+
+  repository["Repositorio Git<br/>Código, prompts, tools, tests y datasets"]
+  pipeline["Pipeline CI/CD<br/>Test, lint, seguridad y contratos"]
+  terraform["Terraform<br/>Recursos, conexiones, red y RBAC"]
+  azd["Azure Developer CLI<br/>Empaquetar y desplegar agente"]
+  acr[("Azure Container Registry<br/>Artefacto versionado")]
+  candidate["Agent Endpoint<br/>Versión candidata inmutable"]
+
+  scenarios["Dataset de escenarios<br/>Demorado · interlínea · ambiguo<br/>sin evidencia · no autorizado · conflicto"]
+  operational["Sistemas simulados<br/>Estados y rutas reproducibles"]
+  evaluation["Microsoft Foundry Evaluation<br/>Ejecución end-to-end"]
+  rag_metrics["Calidad RAG<br/>Retrieval · vigencia · groundedness · citas"]
+  agent_metrics["Trayectoria agéntica<br/>Tool choice · aclaración · reintentos · stop"]
+  safety_metrics["Acciones y seguridad<br/>Aprobación · RBAC · PII · no escrituras indebidas"]
+  review["Revisión de experto<br/>Equipajes, estación y cumplimiento"]
+  gate{"¿Todos los umbrales<br/>y casos críticos pasan?"}
+
+  traces["OpenTelemetry<br/>Iteraciones, tools, latencia, tokens y resultado"]
+  insights["Azure Monitor / Application Insights<br/>PII redactada"]
+  alerts["Alertas y dashboards<br/>Fallos, escalamiento, coste y latencia"]
+  kpi["KPIs operacionales<br/>Tiempo de gestión · resolución asistida<br/>correcciones humanas · acciones fallidas"]
+
+  title --> azure_services
+  azure_services --> repository
+  repository --> pipeline
+  pipeline --> terraform
+  pipeline --> azd
+  azd --> acr
+  acr --> candidate
+  terraform -. "Provisionar" .-> candidate
+
+  scenarios --> evaluation
+  operational --> evaluation
+  candidate --> evaluation
+  evaluation --> rag_metrics
+  evaluation --> agent_metrics
+  evaluation --> safety_metrics
+  rag_metrics --> review
+  agent_metrics --> review
+  safety_metrics --> review
+  review --> gate
+  gate -->|"Sí: promover gradualmente"| candidate
+  gate -->|"No: corregir"| repository
+
+  candidate --> traces
+  traces --> insights
+  insights --> alerts
+  insights --> kpi
+  kpi -. "Casos anonimizados" .-> scenarios
+
+  versioning["Trazabilidad: agente, prompt, modelo,<br/>tool contracts, índice, manuales vigentes,<br/>dataset y resultados de evaluación."]
+  rollback["Rollback inmediato y kill switch<br/>para herramientas con efectos externos."]
+  versioning -.-> evaluation
+  versioning -.-> candidate
+  rollback -.-> candidate
+
+  classDef titleNode fill:#172554,stroke:#172554,color:#ffffff
+  classDef delivery fill:#e8f1ff,stroke:#2563eb,stroke-width:2px,color:#172554
+  classDef observe fill:#e6f7ff,stroke:#0078d4,color:#003b5c
+  classDef quality fill:#f3e8ff,stroke:#7e22ce,stroke-width:2px,color:#3b0764
+  classDef decision fill:#fff7d6,stroke:#b7791f,color:#5f370e
+  classDef note fill:#ecfdf5,stroke:#059669,color:#064e3b
+  classDef serviceList fill:#e6f7ff,stroke:#0078d4,stroke-width:2px,color:#003b5c
+
+  class title titleNode
+  class azure_services serviceList
+  class repository,pipeline,terraform,azd,acr,candidate delivery
+  class traces,insights,alerts,kpi observe
+  class scenarios,operational,evaluation,rag_metrics,agent_metrics,safety_metrics,review quality
+  class gate decision
+  class versioning,rollback note

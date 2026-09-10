@@ -1,0 +1,59 @@
+flowchart TB
+  %% Recursos y valores que deben configurarse antes de ejecutar la aplicación.
+  subgraph frontend_registration["1. Registro de aplicación: Streamlit"]
+    frontend_client["Client ID y client secret"]
+    redirect_uri["Redirect URI local<br/>http://localhost:8501/oauth2callback"]
+    api_permission["Permiso delegado a FastAPI<br/>access_as_user"]
+  end
+
+  subgraph api_registration["2. Registro de aplicación: FastAPI"]
+    api_client["Client ID y client secret"]
+    exposed_scope["Application ID URI<br/>api://client-id-api"]
+    access_scope["Scope expuesto<br/>access_as_user"]
+    search_permission["Permiso delegado de Azure AI Search<br/>user_impersonation<br/>con consentimiento de administrador"]
+  end
+
+  subgraph authorization["3. Autorización de usuarios"]
+    entra_group["Grupo de usuarios<br/>Microsoft Entra ID"]
+    search_role["Azure RBAC<br/>Search Index Data Contributor"]
+    search["Azure AI Search"]
+  end
+
+  subgraph application_configuration["4. Configuración de la aplicación"]
+    streamlit_secrets[".streamlit/secrets.toml<br/>OIDC, client secret y cookie secret"]
+    backend_settings["FastAPI / Container App<br/>APP_ENTRA_*<br/>APP_AZURE_SEARCH_*"]
+    terraform["Terraform<br/>configura FastAPI y RBAC"]
+  end
+
+  frontend_client --> streamlit_secrets
+  redirect_uri --> streamlit_secrets
+  api_permission --> streamlit_secrets
+
+  exposed_scope --> access_scope
+  access_scope --> api_permission
+  api_client --> backend_settings
+  search_permission --> backend_settings
+
+  entra_group --> search_role
+  search_role --> search
+  terraform --> backend_settings
+  terraform --> search_role
+
+  managed_identity["Managed Identity de Container Apps<br/>solo AcrPull"]
+  acr["Azure Container Registry"]
+  admin_cli["az login<br/>solo Terraform y tareas administrativas"]
+
+  managed_identity -->|"AcrPull"| acr
+  admin_cli -.-> terraform
+
+  classDef identity fill:#eef2ff,stroke:#4f46e5,color:#312e81
+  classDef config fill:#f3e8ff,stroke:#7e22ce,color:#3b0764
+  classDef permission fill:#fff7d6,stroke:#b7791f,color:#5f370e
+  classDef azure fill:#e6f7ff,stroke:#0078d4,color:#003b5c
+  classDef note fill:#f3f4f6,stroke:#6b7280,color:#111827
+
+  class frontend_client,redirect_uri,api_client,exposed_scope,streamlit_secrets,backend_settings,terraform config
+  class api_permission,access_scope,search_permission,search_role permission
+  class entra_group,managed_identity identity
+  class search,acr azure
+  class admin_cli note

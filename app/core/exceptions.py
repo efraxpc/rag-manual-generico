@@ -62,6 +62,16 @@ class TextStoreUnavailableError(ApplicationError):
         )
 
 
+class TextSearchUnavailableError(ApplicationError):
+    def __init__(self) -> None:
+        super().__init__(
+            "No se pudo consultar el índice de texto. Comprueba su existencia y "
+            "los permisos de Entra ID.",
+            status_code=503,
+            code="text_search_unavailable",
+        )
+
+
 class SearchAccessDeniedError(ApplicationError):
     def __init__(self) -> None:
         super().__init__(

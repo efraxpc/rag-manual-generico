@@ -1,0 +1,78 @@
+%%{init: {"flowchart": {"curve": "linear", "nodeSpacing": 16, "rankSpacing": 22}, "themeVariables": {"fontSize": "11px"}}}%%
+flowchart TB
+  %% Lámina 3 de 8. Bucle agéntico de investigación para A4 vertical.
+
+  title["<b>3/8 · Investigación</b><br/>Bucle agéntico y selección de herramientas"]
+  azure_services["<b>Servicios · arquitectura objetivo</b><br/>Microsoft Foundry Agent Service · Azure OpenAI<br/>Azure AI Search + Semantic Ranker · APIs operacionales de la aerolínea"]
+  case["Caso de equipaje<br/>+ identidad, rol y estación"]
+  validation["Validar token, alcance,<br/>solicitud y datos sensibles"]
+  state["Recuperar thread<br/>hechos y acciones previas"]
+  plan["Interpretar objetivo<br/>y planificar siguiente paso"]
+  decide{"¿Qué necesita<br/>el agente ahora?"}
+
+  clarify["Pedir dato mínimo<br/>etiqueta, vuelo, fecha o estación"]
+  user_reply["Respuesta del usuario<br/>actualiza el estado"]
+
+  rewrite["Construir o reformular consulta<br/>según estación, operador y vigencia"]
+  retrieval["search_procedures<br/>Texto + vector + filtros ACL"]
+  search[("Azure AI Search<br/>Manuales, SOP y políticas")]
+  rank["Semantic Ranker + filtros<br/>vigencia, ámbito y duplicados"]
+
+  operational["Elegir herramienta operacional<br/>estado · itinerario · rutas"]
+  airline[("Sistemas de la aerolínea<br/>Datos actuales del caso")]
+
+  evidence["Acumular hechos y evidencia<br/>source + page + section + timestamp"]
+  enough{"¿Evidencia suficiente,<br/>vigente y consistente?"}
+  retry["Ajustar plan o consulta<br/>Máximo 3 iteraciones"]
+  limit{"¿Quedan intentos<br/>seguros?"}
+  escalate["Abstenerse y escalar<br/>Motivo + evidencia disponible"]
+  proposal["Preparar plan de recuperación<br/>Continuar con 4/8"]
+
+  title --> azure_services
+  azure_services --> case
+  case --> validation
+  validation --> state
+  state --> plan
+  plan --> decide
+
+  decide -->|"Falta información"| clarify
+  clarify --> user_reply
+  user_reply --> plan
+
+  decide -->|"Necesita procedimiento"| rewrite
+  rewrite --> retrieval
+  retrieval --> search
+  search --> rank
+  rank --> evidence
+
+  decide -->|"Necesita hecho operacional"| operational
+  operational --> airline
+  airline --> evidence
+
+  evidence --> enough
+  enough -->|"Sí"| proposal
+  enough -->|"No"| limit
+  limit -->|"Sí"| retry
+  retry --> decide
+  limit -->|"No"| escalate
+
+  guardrail["Los filtros ACL, PII, vigencia<br/>y límite de iteraciones son<br/>deterministas; no los decide el modelo."]
+  guardrail -.-> validation
+  guardrail -.-> retrieval
+  guardrail -.-> limit
+
+  classDef titleNode fill:#172554,stroke:#172554,color:#ffffff
+  classDef input fill:#f3f4f6,stroke:#4b5563,color:#111827
+  classDef phase fill:#fff7d6,stroke:#b7791f,stroke-width:2px,color:#5f370e
+  classDef azure fill:#f3e8ff,stroke:#7e22ce,color:#3b0764
+  classDef result fill:#ecfdf5,stroke:#059669,stroke-width:2px,color:#064e3b
+  classDef warning fill:#fff1f2,stroke:#be123c,color:#881337
+  classDef serviceList fill:#e6f7ff,stroke:#0078d4,stroke-width:2px,color:#003b5c
+
+  class title titleNode
+  class azure_services serviceList
+  class case,user_reply input
+  class validation,state,plan,clarify,rewrite,retrieval,rank,operational,evidence,retry phase
+  class search,airline azure
+  class proposal result
+  class decide,enough,limit,escalate,guardrail warning

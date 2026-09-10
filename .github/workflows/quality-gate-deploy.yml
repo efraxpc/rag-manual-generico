@@ -1,0 +1,145 @@
+name: Quality gate and deploy
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  AZURE_CORE_OUTPUT: none
+  PYTHON_VERSION: "3.11"
+
+concurrency:
+  group: quality-gate-deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests-and-lint:
+    name: Tests and lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install project
+        run: python -m pip install -e ".[dev]"
+
+      - name: Run tests
+        run: pytest
+
+      - name: Run Ruff checks
+        run: |
+          ruff check .
+          ruff format --check .
+
+  rag-quality-gate:
+    name: Generate and judge candidate answers
+    if: github.event_name != 'pull_request'
+    needs: tests-and-lint
+    runs-on: ubuntu-latest
+    environment: evaluation
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      APP_AZURE_SEARCH_ENDPOINT: ${{ vars.EVAL_AZURE_SEARCH_ENDPOINT }}
+      APP_AZURE_SEARCH_TEXT_INDEX_NAME: ${{ vars.EVAL_AZURE_SEARCH_TEXT_INDEX_NAME }}
+      APP_AZURE_OPENAI_ENDPOINT: ${{ vars.EVAL_AZURE_OPENAI_ENDPOINT }}
+      APP_AZURE_OPENAI_CHAT_DEPLOYMENT: ${{ vars.EVAL_AZURE_OPENAI_CHAT_DEPLOYMENT }}
+      APP_AZURE_OPENAI_JUDGE_DEPLOYMENT: ${{ vars.EVAL_AZURE_OPENAI_JUDGE_DEPLOYMENT }}
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install project
+        run: python -m pip install -e ".[dev]"
+
+      - name: Log in to Azure with OIDC
+        uses: azure/login@v3
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Generate answers with the candidate RAG
+        run: |
+          python -m app.commands.generate_evaluation_answers \
+            evaluations/datasets/rag_scenarios.jsonl \
+            --documents-dir evaluations/corpus \
+            --output evaluations/results/candidate-answers.jsonl
+
+      - name: Apply LLM-as-a-judge quality gate
+        run: |
+          python -m app.commands.evaluate_answers \
+            evaluations/results/candidate-answers.jsonl \
+            --output evaluations/results/judge-report.json \
+            --threshold 4
+
+      - name: Preserve evaluation evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: rag-evaluation-${{ github.sha }}
+          path: evaluations/results/
+          if-no-files-found: warn
+          retention-days: 30
+
+  deploy:
+    name: Deploy approved image
+    if: github.event_name != 'pull_request'
+    needs: rag-quality-gate
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout approved commit
+        uses: actions/checkout@v6
+
+      - name: Log in to Azure with OIDC
+        uses: azure/login@v3
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Build immutable image in ACR
+        env:
+          REGISTRY: ${{ vars.AZURE_CONTAINER_REGISTRY_NAME }}
+          REPOSITORY: ${{ vars.AZURE_CONTAINER_IMAGE_REPOSITORY }}
+        run: |
+          az acr build \
+            --registry "${REGISTRY}" \
+            --image "${REPOSITORY}:${GITHUB_SHA}" \
+            .
+
+      - name: Deploy approved image to Container Apps
+        env:
+          REGISTRY: ${{ vars.AZURE_CONTAINER_REGISTRY_NAME }}
+          REPOSITORY: ${{ vars.AZURE_CONTAINER_IMAGE_REPOSITORY }}
+          RESOURCE_GROUP: ${{ vars.AZURE_CONTAINER_APP_RESOURCE_GROUP }}
+          CONTAINER_APP: ${{ vars.AZURE_CONTAINER_APP_NAME }}
+        run: |
+          login_server="$(az acr show --name "${REGISTRY}" --query loginServer --output tsv)"
+          az containerapp update \
+            --resource-group "${RESOURCE_GROUP}" \
+            --name "${CONTAINER_APP}" \
+            --image "${login_server}/${REPOSITORY}:${GITHUB_SHA}"

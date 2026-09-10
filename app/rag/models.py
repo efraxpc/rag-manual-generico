@@ -25,5 +25,20 @@ class VectorQuery(BaseModel):
     document_id: str | None = Field(default=None, min_length=1, max_length=512)
 
 
+class TextQuery(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    question: str = Field(min_length=1, max_length=4_000)
+    top_k: int = Field(default=5, ge=1, le=20)
+    document_id: str | None = Field(default=None, min_length=1, max_length=512)
+
+
 class SearchHit(Chunk):
     score: FiniteFloat
+
+
+class RagAnswer(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    answer: str = Field(min_length=1, max_length=16_000)
+    context: list[SearchHit] = Field(max_length=20)

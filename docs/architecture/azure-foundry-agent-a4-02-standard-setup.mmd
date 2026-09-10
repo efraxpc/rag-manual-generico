@@ -1,0 +1,64 @@
+%%{init: {"flowchart": {"curve": "linear", "nodeSpacing": 18, "rankSpacing": 24}, "themeVariables": {"fontSize": "12px"}}}%%
+flowchart TB
+  %% Lámina 2 de 8. Runtime y herramientas del agente para A4 vertical.
+
+  title["<b>2/8 · Microsoft Foundry</b><br/>Runtime, estado y herramientas del agente"]
+  azure_services["<b>Servicios · arquitectura objetivo</b><br/>Microsoft Foundry Agent Service · Azure OpenAI · Azure Container Apps<br/>Azure Blob Storage · Azure Cosmos DB · Azure AI Search"]
+
+  account["Microsoft Foundry Account<br/>Gobierno y catálogo"]
+  account_host["Account Capability Host<br/>Habilita Agent Service"]
+  project["Foundry Project<br/>Aislamiento y Managed Identity"]
+  project_host["Project Capability Host<br/>Recursos propios del proyecto"]
+  endpoint["Agent Endpoint<br/>Responses API y versión activa"]
+  runtime["Hosted Agent Runtime<br/>Bucle de decisión y límites"]
+  toolbox["Foundry Toolbox<br/>Conexiones administradas"]
+
+  storage[("Azure Storage<br/>Manuales originales")]
+  cosmos[("Azure Cosmos DB<br/>Threads y estado del caso")]
+  search[("Azure AI Search<br/>Conocimiento operacional")]
+  models["Azure OpenAI en Microsoft Foundry<br/>Chat + embeddings"]
+
+  tool_api["Tool API · Azure Container Apps<br/>get_baggage_status · get_itinerary<br/>find_available_routes · prepare_case"]
+  airline[("Sistemas operacionales<br/>Equipaje · reservas · vuelos · expedientes")]
+
+  title --> azure_services
+  azure_services --> account
+  account --> account_host
+  account --> project
+  project --> project_host
+  project --> endpoint
+  endpoint --> runtime
+  project --> toolbox
+  runtime -->|"Elegir herramienta"| toolbox
+  runtime -->|"Function tools"| tool_api
+
+  project_host -->|"storageConnections"| storage
+  project_host -->|"threadStorageConnections"| cosmos
+  project_host -->|"vectorStoreConnections"| search
+  toolbox --> search
+  toolbox --> models
+  tool_api -->|"APIs con alcance mínimo"| airline
+
+  identity["Identidad dedicada del agente<br/>RBAC y credenciales administradas"]
+  project --- identity
+  identity -.-> storage
+  identity -.-> cosmos
+  identity -.-> search
+  identity -.-> tool_api
+
+  control["Lecturas: automáticas y auditadas.<br/>Escrituras: idempotencia, autorización<br/>y aprobación humana obligatoria."]
+  control -.-> tool_api
+
+  classDef titleNode fill:#172554,stroke:#172554,color:#ffffff
+  classDef foundry fill:#e8f1ff,stroke:#2563eb,stroke-width:2px,color:#172554
+  classDef data fill:#ecfdf5,stroke:#059669,stroke-width:2px,color:#064e3b
+  classDef identityNode fill:#eef2ff,stroke:#4f46e5,color:#312e81
+  classDef noteNode fill:#fff7d6,stroke:#b7791f,color:#5f370e
+  classDef serviceList fill:#e6f7ff,stroke:#0078d4,stroke-width:2px,color:#003b5c
+
+  class title titleNode
+  class azure_services serviceList
+  class account,account_host,project,project_host,endpoint,runtime,toolbox,tool_api foundry
+  class storage,cosmos,search,models,airline data
+  class identity identityNode
+  class control noteNode

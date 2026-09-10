@@ -1,0 +1,68 @@
+%%{init: {"flowchart": {"curve": "linear", "nodeSpacing": 18, "rankSpacing": 24}, "themeVariables": {"fontSize": "12px"}}}%%
+flowchart TB
+  %% Lámina 5 de 8. Gobierno, recepción y extracción del conocimiento.
+
+  title["<b>5/8 · Conocimiento operacional</b><br/>Recepción, gobierno y extracción"]
+  azure_services["<b>Servicios · arquitectura objetivo</b><br/>Microsoft Entra ID · Azure Container Apps · Azure Blob Storage<br/>Azure Service Bus · Azure AI Document Intelligence"]
+  owner["Propietario de contenido<br/>Equipajes, estaciones o legal"]
+  sources["Manuales de equipaje · SOP de estación<br/>Acuerdos interlínea · políticas de compensación"]
+  ui["Azure Container Apps<br/>Portal de administración"]
+  api["FastAPI · validar identidad,<br/>rol y ámbito documental"]
+  validate["Validar archivo, propietario,<br/>checksum, idioma y clasificación"]
+  governance{"¿Documento aprobado,<br/>vigente y versionado?"}
+  rejected["Cuarentena<br/>No disponible para el agente"]
+  document_id["Calcular document_id<br/>Hash estable e idempotente"]
+  blob[("Azure Storage<br/>Original inmutable + metadatos")]
+  queue[["Azure Service Bus<br/>Publicar trabajo"]]
+  worker["Azure Container Apps<br/>Worker de ingesta"]
+  format{"¿Necesita OCR,<br/>tablas o estructura?"}
+  local["Extracción local<br/>PDF con texto, TXT y Markdown"]
+  intelligence["Azure AI Document Intelligence<br/>OCR, tablas y estructura"]
+  normalize["Normalizar secciones, pasos,<br/>tablas y números de página"]
+  output["Salida normalizada<br/>Texto + estructura + procedencia"]
+
+  title --> azure_services
+  azure_services --> owner
+  owner --> sources
+  sources --> ui
+  ui -->|"Archivo + ficha documental"| api
+  api --> validate
+  validate --> governance
+  governance -->|"No"| rejected
+  governance -->|"Sí"| document_id
+  document_id --> blob
+  document_id --> queue
+  queue --> worker
+  worker -->|"Leer"| blob
+  worker --> format
+  format -->|"No"| local
+  format -->|"Sí"| intelligence
+  local --> normalize
+  intelligence --> normalize
+  normalize --> output
+
+  next["Continuar con 6/8:<br/>Chunking e indexación con vigencia"]
+  output --> next
+  privacy["No indexar PNR, etiquetas, nombres<br/>ni datos transaccionales de pasajeros."]
+  privacy -.-> validate
+  error["Error recuperable:<br/>reintento limitado y luego DLQ"]
+  worker -->|"Fallo"| error
+  error --> queue
+
+  classDef titleNode fill:#172554,stroke:#172554,color:#ffffff
+  classDef actor fill:#f3f4f6,stroke:#4b5563,color:#111827
+  classDef app fill:#e8f1ff,stroke:#2563eb,stroke-width:2px,color:#172554
+  classDef process fill:#fff7d6,stroke:#b7791f,stroke-width:2px,color:#5f370e
+  classDef azure fill:#f3e8ff,stroke:#7e22ce,color:#3b0764
+  classDef data fill:#ecfdf5,stroke:#059669,color:#064e3b
+  classDef warning fill:#fff1f2,stroke:#be123c,color:#881337
+  classDef serviceList fill:#e6f7ff,stroke:#0078d4,stroke-width:2px,color:#003b5c
+
+  class title titleNode
+  class azure_services serviceList
+  class owner,sources actor
+  class ui,api,worker app
+  class validate,governance,document_id,format,local,normalize process
+  class intelligence azure
+  class blob,queue,output,next data
+  class rejected,privacy,error warning

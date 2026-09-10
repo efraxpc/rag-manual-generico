@@ -19,6 +19,11 @@ class Settings(BaseSettings):
     azure_search_index_name: str | None = Field(default=None, min_length=1)
     azure_search_text_index_name: str | None = Field(default=None, min_length=1)
     azure_search_vector_dimensions: int | None = Field(default=None, ge=1)
+    azure_openai_endpoint: HttpUrl | None = None
+    azure_openai_chat_deployment: str | None = Field(default=None, min_length=1)
+    azure_openai_judge_deployment: str | None = Field(default=None, min_length=1)
+    rag_generation_timeout_seconds: float = Field(default=60, gt=0, le=300)
+    llm_judge_timeout_seconds: float = Field(default=60, gt=0, le=300)
     azure_managed_identity_client_id: str | None = Field(default=None, min_length=1)
     entra_tenant_id: UUID | None = None
     entra_api_client_id: UUID | None = None
@@ -58,6 +63,39 @@ class Settings(BaseSettings):
             and self.azure_search_text_index_name == self.azure_search_index_name
         ):
             raise ValueError("Los índices textual y vectorial deben ser distintos.")
+        return self
+
+    @model_validator(mode="after")
+    def validate_judge_configuration(self) -> Self:
+        deployments = (
+            self.azure_openai_chat_deployment,
+            self.azure_openai_judge_deployment,
+        )
+        if self.azure_openai_endpoint is None and any(
+            deployment is not None for deployment in deployments
+        ):
+            raise ValueError(
+                "Configura APP_AZURE_OPENAI_ENDPOINT conjuntamente con los "
+                "despliegues de Azure OpenAI que utilices."
+            )
+        if self.azure_openai_endpoint is not None and not any(
+            deployment is not None for deployment in deployments
+        ):
+            raise ValueError(
+                "Configura APP_AZURE_OPENAI_ENDPOINT conjuntamente con al menos "
+                "APP_AZURE_OPENAI_CHAT_DEPLOYMENT o "
+                "APP_AZURE_OPENAI_JUDGE_DEPLOYMENT."
+            )
+        if self.azure_openai_endpoint is not None and (
+            self.azure_openai_endpoint.scheme != "https"
+            or self.azure_openai_endpoint.path not in {"", "/"}
+            or self.azure_openai_endpoint.query is not None
+            or self.azure_openai_endpoint.fragment is not None
+        ):
+            raise ValueError(
+                "APP_AZURE_OPENAI_ENDPOINT debe ser una URL HTTPS de recurso, "
+                "sin ruta ni query."
+            )
         return self
 
     @property

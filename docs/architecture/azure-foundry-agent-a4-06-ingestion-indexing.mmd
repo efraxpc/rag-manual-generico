@@ -1,0 +1,59 @@
+%%{init: {"flowchart": {"curve": "linear", "nodeSpacing": 18, "rankSpacing": 24}, "themeVariables": {"fontSize": "12px"}}}%%
+flowchart TB
+  %% Lámina 6 de 8. Chunking e indexación del conocimiento de equipaje.
+
+  title["<b>6/8 · Conocimiento operacional</b><br/>Chunking, vigencia e indexación"]
+  azure_services["<b>Servicios · arquitectura objetivo</b><br/>Azure Container Apps · Azure OpenAI · Azure AI Search<br/>Microsoft Entra ID · Managed Identity · Azure RBAC"]
+  sections["Secciones y procedimientos<br/>normalizados desde 5/8"]
+  chunking["Dividir por procedimiento<br/>Conservar pasos, advertencias y tablas"]
+  metadata["Metadatos de procedencia<br/>source · section · page · chunk_id"]
+  business["Metadatos operacionales<br/>aerolínea · estación · operador · idioma"]
+  validity["Vigencia y versión<br/>valid_from · valid_to · approved_status"]
+  acl["Clasificación y ACL<br/>rol, grupo y ámbito"]
+  embedding["Azure OpenAI Embeddings<br/>Vectorización por lotes"]
+  validate["Validar vectores, metadatos,<br/>duplicados y referencias"]
+  batches["Crear lotes<br/>Límite de documentos y bytes"]
+  search[("Azure AI Search<br/>Texto + vector + metadatos + ACL")]
+  semantic["Semantic configuration<br/>Título, sección, contenido y términos"]
+  status["Actualizar estado<br/>listo, parcial, sustituido o error"]
+  ready["Disponible para search_procedures<br/>solo si está aprobado y vigente"]
+
+  title --> azure_services
+  azure_services --> sections
+  sections --> chunking
+  chunking --> metadata
+  metadata --> business
+  business --> validity
+  validity --> acl
+  acl --> embedding
+  embedding --> validate
+  validate --> batches
+  batches -->|"Upload idempotente"| search
+  semantic --> search
+  search --> status
+  status -->|"Éxito completo"| ready
+
+  filter["Filtro obligatorio en consulta:<br/>ACL + vigencia + estación/operador<br/>cuando corresponda al caso."]
+  filter -.-> search
+  failure["No declarar éxito si falla<br/>algún chunk del lote."]
+  retry["Reintentar errores transitorios;<br/>registrar IDs fallidos."]
+  status -->|"Parcial o error"| failure
+  failure --> retry
+  access["Managed Identity<br/>Search Index Data Contributor"]
+  access -.-> search
+
+  classDef titleNode fill:#172554,stroke:#172554,color:#ffffff
+  classDef input fill:#f3f4f6,stroke:#4b5563,color:#111827
+  classDef phase fill:#fff7d6,stroke:#b7791f,stroke-width:2px,color:#5f370e
+  classDef azure fill:#f3e8ff,stroke:#7e22ce,color:#3b0764
+  classDef data fill:#ecfdf5,stroke:#059669,stroke-width:2px,color:#064e3b
+  classDef warning fill:#fff1f2,stroke:#be123c,color:#881337
+  classDef serviceList fill:#e6f7ff,stroke:#0078d4,stroke-width:2px,color:#003b5c
+
+  class title titleNode
+  class azure_services serviceList
+  class sections input
+  class chunking,metadata,business,validity,acl,validate,batches,status phase
+  class embedding,semantic azure
+  class search,ready data
+  class filter,failure,retry,access warning

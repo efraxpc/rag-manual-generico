@@ -11,6 +11,7 @@ from app.api import dependencies
 from app.core import resources
 from app.core.auth import require_user
 from app.core.config import Settings
+from app.integrations.azure_openai_chat import AZURE_AI_SCOPE
 from app.integrations.azure_text_search import AzureTextSearchAdapter
 from app.rag.contracts import TextChunkStore
 from tests.auth_helpers import authenticated_user, entra_settings
@@ -115,6 +116,51 @@ def test_unconfigured_text_store_does_not_create_client(
         user_assertion="user-token",
     ) as store:
         assert store is None
+    factory.assert_not_called()
+
+
+def test_chat_client_uses_user_obo_identity_and_closes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    credential, http_client, chat_client = MagicMock(), MagicMock(), Mock()
+    credential.__enter__.return_value = credential
+    http_client.__enter__.return_value = http_client
+    credential_factory = Mock(return_value=credential)
+    http_factory = Mock(return_value=http_client)
+    chat_factory = Mock(return_value=chat_client)
+    monkeypatch.setattr(resources, "OnBehalfOfCredential", credential_factory)
+    monkeypatch.setattr(resources.httpx, "Client", http_factory)
+    monkeypatch.setattr(resources, "AzureOpenAIChatClient", chat_factory)
+    settings = text_settings(
+        azure_openai_endpoint="https://example.openai.azure.com",
+        azure_openai_chat_deployment="candidate-v1",
+    )
+
+    with resources.open_user_chat_client(
+        settings, user_assertion="user-token"
+    ) as client:
+        assert client is chat_client
+
+    credential.get_token.assert_called_once_with(AZURE_AI_SCOPE)
+    chat_factory.assert_called_once_with(
+        endpoint="https://example.openai.azure.com/",
+        deployment="candidate-v1",
+        credential=credential,
+        http_client=http_client,
+    )
+    http_client.__exit__.assert_called_once()
+    credential.__exit__.assert_called_once()
+
+
+def test_unconfigured_chat_does_not_create_credentials(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    factory = Mock()
+    monkeypatch.setattr(resources, "OnBehalfOfCredential", factory)
+    with resources.open_user_chat_client(
+        text_settings(), user_assertion="user-token"
+    ) as client:
+        assert client is None
     factory.assert_not_called()
 
 

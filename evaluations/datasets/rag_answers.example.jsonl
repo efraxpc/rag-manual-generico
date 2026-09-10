@@ -1,0 +1,1 @@
+{"id":"desconexion-001","question":"¿Qué debo hacer antes del mantenimiento?","answer":"Desconecta el equipo antes del mantenimiento [manual.pdf, p. 1].","context":[{"content":"Desconecta el equipo antes del mantenimiento.","source":"manual.pdf","page":1}],"expected_answer":"Desconectar el equipo antes de iniciar el mantenimiento.","expected_sources":["manual.pdf, p. 1"]}

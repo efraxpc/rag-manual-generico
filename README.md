@@ -37,11 +37,13 @@ Para reiniciar ambos servicios desde otra terminal, ejecuta:
 ./scripts/run_local.sh restart
 ```
 
-Si no hay una instancia registrada, en Linux `restart` también detecta y detiene
-instancias anteriores de este mismo script que no tengan archivo PID, y luego
-inicia ambos servicios. Si un puerto está ocupado por otro proceso, el script
-informa del conflicto y no inicia los servicios. El mensaje de disponibilidad
-aparece cuando la API y la interfaz responden a sus comprobaciones de salud.
+`restart` detiene por completo la instancia registrada antes de iniciar otra; si
+no responde a la señal de terminación, fuerza el cierre de su launcher y sus
+procesos descendientes. Si no hay una instancia registrada, en Linux también
+detecta y detiene instancias anteriores de este mismo script que no tengan
+archivo PID. Si un puerto está ocupado por otro proceso, el script informa del
+conflicto y no inicia los servicios. El mensaje de disponibilidad aparece cuando
+la API y la interfaz responden a sus comprobaciones de salud.
 
 También puedes iniciar cada servicio por separado. Inicia la API en una
 terminal:
@@ -78,8 +80,9 @@ dividirlos en fragmentos y guardarlos en Azure AI Search con el botón
 para preparar el índice de texto y configurar el entorno.
 
 La API también permite indexar y recuperar chunks con embeddings precalculados
-mediante el patrón Adapter. La generación de embeddings, el OCR y las respuestas
-a preguntas siguen pendientes; los archivos cargados se guardan solo como texto.
+mediante el patrón Adapter. La generación de embeddings y el OCR siguen pendientes.
+Las respuestas interactivas y el gate de CI comparten el mismo baseline RAG sobre
+el índice textual, de modo que CI evalúa el código candidato que atiende la API.
 
 Consulta la [guía del almacén vectorial](docs/vector-store.md) para configurar
 Entra ID, preparar el índice y probar los endpoints:
@@ -87,6 +90,7 @@ Entra ID, preparar el índice y probar los endpoints:
 - `POST /api/v1/documents/chunks`: indexación de chunks con embeddings.
 - `POST /api/v1/queries/search`: recuperación vectorial de chunks.
 - `POST /api/v1/documents/upload`: carga de un archivo y almacenamiento textual.
+- `POST /api/v1/queries/answer`: búsqueda textual y respuesta RAG con citas.
 
 La documentación interactiva estará disponible en:
 
@@ -99,7 +103,14 @@ La documentación interactiva estará disponible en:
 ```bash
 pytest
 ruff check .
+ruff format --check .
 ```
+
+El workflow `quality-gate-deploy.yml` ejecuta tests y lint, genera respuestas de
+la versión candidata sobre el corpus versionado, las evalúa con LLM-as-a-judge y
+solo despliega el commit si todos los casos pasan. Consulta la
+[guía de evaluación](docs/llm-as-a-judge.md) para configurar los entornos de
+GitHub y ejecutar el mismo flujo localmente.
 
 ## Estructura
 

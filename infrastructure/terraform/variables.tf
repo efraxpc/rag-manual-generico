@@ -166,6 +166,36 @@ variable "container_app_max_replicas" {
   }
 }
 
+variable "azure_openai_endpoint" {
+  description = "Endpoint HTTPS raíz de Azure OpenAI usado por la API para generar respuestas."
+  type        = string
+  default     = null
+  nullable    = true
+
+  validation {
+    condition = (
+      var.azure_openai_endpoint == null ||
+      can(regex("^https://[^/?#]+/?$", var.azure_openai_endpoint))
+    )
+    error_message = "azure_openai_endpoint debe ser una URL HTTPS raíz, sin ruta ni query."
+  }
+}
+
+variable "azure_openai_chat_deployment" {
+  description = "Nombre del despliegue de chat usado por el RAG de la API."
+  type        = string
+  default     = null
+  nullable    = true
+
+  validation {
+    condition = (
+      var.azure_openai_chat_deployment == null ||
+      length(trimspace(var.azure_openai_chat_deployment)) > 0
+    )
+    error_message = "azure_openai_chat_deployment no puede estar vacío."
+  }
+}
+
 variable "search_service_name" {
   description = "Nombre global de Azure AI Search. Si es null, se genera uno estable con la suscripción."
   type        = string

@@ -52,9 +52,9 @@ def test_restart_starts_normally_without_active_instance(tmp_path: Path) -> None
     assert "No se encontró el intérprete de Python" in result.stderr
 
 
-def test_restart_signals_active_launcher(tmp_path: Path) -> None:
+def test_restart_stops_active_launcher_before_starting(tmp_path: Path) -> None:
     ready_file = tmp_path / "ready"
-    restarted_file = tmp_path / "restarted"
+    stopped_file = tmp_path / "stopped"
     pid_file = tmp_path / "run_local.pid"
     launcher_code = """
 import signal
@@ -62,20 +62,20 @@ import sys
 from pathlib import Path
 
 ready_file = Path(sys.argv[1])
-restarted_file = Path(sys.argv[2])
+stopped_file = Path(sys.argv[2])
 
 
-def restart(_signal_number, _frame):
-    restarted_file.touch()
+def stop(_signal_number, _frame):
+    stopped_file.touch()
     raise SystemExit(0)
 
 
-signal.signal(signal.SIGUSR1, restart)
+signal.signal(signal.SIGTERM, stop)
 ready_file.touch()
 signal.pause()
 """
     launcher = subprocess.Popen(
-        [sys.executable, "-c", launcher_code, str(ready_file), str(restarted_file)]
+        [sys.executable, "-c", launcher_code, str(ready_file), str(stopped_file)]
     )
 
     try:
@@ -94,15 +94,66 @@ signal.pause()
             check=True,
         ).stdout.strip()
         pid_file.write_text(f"{launcher.pid}|{identity}\n", encoding="utf-8")
-        env = os.environ | {"RAG_RUN_LOCAL_PID_FILE": str(pid_file)}
+        env = os.environ | {
+            "RAG_PYTHON_BIN": str(tmp_path / "missing-python"),
+            "RAG_RUN_LOCAL_PID_FILE": str(pid_file),
+        }
 
         result = run_script("restart", env=env)
 
-        assert result.returncode == 0
-        assert f"Solicitud de reinicio enviada (PID {launcher.pid})." in result.stdout
+        assert result.returncode == 1
+        assert f"Deteniendo la instancia activa (PID {launcher.pid})" in result.stdout
+        assert "Instancia anterior detenida; iniciando una nueva." in result.stdout
+        assert "No se encontró el intérprete de Python" in result.stderr
         assert launcher.wait(timeout=5) == 0
-        assert restarted_file.exists()
+        assert stopped_file.exists()
     finally:
         if launcher.poll() is None:
             launcher.send_signal(signal.SIGTERM)
+            launcher.wait(timeout=5)
+
+
+def test_restart_forces_an_unresponsive_launcher_to_stop(tmp_path: Path) -> None:
+    ready_file = tmp_path / "ready"
+    pid_file = tmp_path / "run_local.pid"
+    launcher_code = """
+import signal
+import sys
+from pathlib import Path
+
+signal.signal(signal.SIGTERM, signal.SIG_IGN)
+Path(sys.argv[1]).touch()
+signal.pause()
+"""
+    launcher = subprocess.Popen([sys.executable, "-c", launcher_code, str(ready_file)])
+
+    try:
+        for _attempt in range(50):
+            if ready_file.exists():
+                break
+            time.sleep(0.02)
+        else:
+            raise AssertionError("La instancia simulada no llegó a estar preparada")
+
+        identity = subprocess.run(
+            ["ps", "-p", str(launcher.pid), "-o", "lstart="],
+            env=os.environ | {"LC_ALL": "C"},
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+        pid_file.write_text(f"{launcher.pid}|{identity}\n", encoding="utf-8")
+        env = os.environ | {
+            "RAG_PYTHON_BIN": str(tmp_path / "missing-python"),
+            "RAG_RUN_LOCAL_PID_FILE": str(pid_file),
+        }
+
+        result = run_script("restart", env=env)
+
+        assert result.returncode == 1
+        assert "Forzando la detención de la instancia activa" in result.stdout
+        assert launcher.wait(timeout=5) == -signal.SIGKILL
+    finally:
+        if launcher.poll() is None:
+            launcher.kill()
             launcher.wait(timeout=5)

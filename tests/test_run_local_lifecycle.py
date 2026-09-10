@@ -181,20 +181,17 @@ def test_registered_restart_replaces_both_services(
         old_api = wait_for_pid(env["RAG_API_PORT"])
         old_ui = wait_for_pid(env["RAG_UI_PORT"])
         wait_for_available(project / "start.log")
-        result = subprocess.run(
-            ["./run_local.sh", "restart"],
-            cwd=project / "scripts",
-            env=env,
-            capture_output=True,
-            text=True,
-            timeout=5,
-            check=False,
-        )
-        assert result.returncode == 0, result.stderr
-        wait_for_pid(env["RAG_API_PORT"], old_api)
-        wait_for_pid(env["RAG_UI_PORT"], old_ui)
-        assert launcher.poll() is None
-        wait_for_available(project / "start.log", count=2)
+        with running_process(
+            ["./run_local.sh", "restart"], project, env, "restart.log"
+        ) as replacement:
+            wait_for_pid(env["RAG_API_PORT"], old_api)
+            wait_for_pid(env["RAG_UI_PORT"], old_ui)
+            assert launcher.wait(timeout=5) == 143
+            assert replacement.poll() is None
+            wait_for_available(project / "restart.log")
+        output = (project / "restart.log").read_text()
+        assert f"Deteniendo la instancia activa (PID {launcher.pid})" in output
+        assert "Instancia anterior detenida; iniciando una nueva." in output
     assert service_pid(env["RAG_API_PORT"]) is None
     assert service_pid(env["RAG_UI_PORT"]) is None
     assert not Path(env["RAG_RUN_LOCAL_PID_FILE"]).exists()

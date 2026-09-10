@@ -1,14 +1,18 @@
 from unittest.mock import Mock
 
 import pytest
-from azure.core.exceptions import HttpResponseError
+from azure.core.exceptions import HttpResponseError, ServiceRequestError
 from azure.search.documents import SearchClient
 from azure.search.documents.models import IndexingResult
 
-from app.core.exceptions import ChunkIndexingError, TextStoreUnavailableError
+from app.core.exceptions import (
+    ChunkIndexingError,
+    TextSearchUnavailableError,
+    TextStoreUnavailableError,
+)
 from app.integrations import azure_text_search
 from app.integrations.azure_text_search import AzureTextSearchAdapter
-from app.rag.models import Chunk
+from app.rag.models import Chunk, TextQuery
 
 
 @pytest.fixture
@@ -97,3 +101,39 @@ def test_stops_after_failed_batch(
     with pytest.raises(TextStoreUnavailableError):
         AzureTextSearchAdapter(client).index_chunks([chunk(0), chunk(1)])
     assert client.upload_documents.call_count == 1
+
+
+def test_searches_text_with_filter_and_maps_context(client: Mock) -> None:
+    client.search.return_value = [
+        {
+            "chunk_id": "chunk-1",
+            "document_id": "O'Brien",
+            "content": "Desconecta el equipo.",
+            "source": "manual.pdf",
+            "page": 2,
+            "@search.score": 0.8,
+        }
+    ]
+
+    results = AzureTextSearchAdapter(client).search(
+        TextQuery(question="¿Qué debo hacer?", document_id="O'Brien", top_k=3)
+    )
+
+    arguments = client.search.call_args.kwargs
+    assert arguments["search_text"] == "¿Qué debo hacer?"
+    assert arguments["filter"] == "document_id eq 'O''Brien'"
+    assert arguments["top"] == 3
+    assert results[0].source == "manual.pdf"
+    assert results[0].page == 2
+    assert results[0].score == 0.8
+
+
+def test_search_failure_is_controlled(client: Mock) -> None:
+    def results() -> object:
+        raise ServiceRequestError("private detail")
+        yield  # pragma: no cover
+
+    client.search.return_value = results()
+    with pytest.raises(TextSearchUnavailableError) as error:
+        AzureTextSearchAdapter(client).search(TextQuery(question="pregunta"))
+    assert "private detail" not in str(error.value)

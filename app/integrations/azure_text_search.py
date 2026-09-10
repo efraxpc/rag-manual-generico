@@ -7,15 +7,17 @@ from typing import Any
 
 from azure.core.exceptions import AzureError
 from azure.search.documents import SearchClient
+from pydantic import ValidationError
 
 from app.core.exceptions import (
     ApplicationError,
     ChunkIndexingError,
     SearchAccessDeniedError,
+    TextSearchUnavailableError,
     TextStoreUnavailableError,
 )
 from app.rag.contracts import TextChunkStore
-from app.rag.models import Chunk
+from app.rag.models import Chunk, SearchHit, TextQuery
 
 INDEX_BATCH_SIZE = 1000
 # Margen respecto a los 16 MB de Azure para serialización y envoltorio del SDK.
@@ -76,3 +78,38 @@ class AzureTextSearchAdapter(TextChunkStore):
         ]
         if failed:
             raise ChunkIndexingError(failed)
+
+    def search(self, query: TextQuery) -> list[SearchHit]:
+        document_filter = None
+        if query.document_id is not None:
+            document_id = query.document_id.replace("'", "''")
+            document_filter = f"document_id eq '{document_id}'"
+
+        try:
+            results = self._client.search(
+                search_text=query.question,
+                filter=document_filter,
+                top=query.top_k,
+                select=["chunk_id", "document_id", "content", "source", "page"],
+            )
+            return [
+                SearchHit(
+                    id=result["chunk_id"],
+                    document_id=result["document_id"],
+                    content=result["content"],
+                    source=result["source"],
+                    page=result.get("page"),
+                    score=result["@search.score"],
+                )
+                for result in results
+            ]
+        except AzureError as exc:
+            if getattr(exc, "status_code", None) == 403:
+                raise SearchAccessDeniedError() from exc
+            raise TextSearchUnavailableError() from exc
+        except (KeyError, TypeError, ValidationError) as exc:
+            raise ApplicationError(
+                "El índice de texto devolvió una respuesta incompatible.",
+                status_code=502,
+                code="invalid_text_search_response",
+            ) from exc

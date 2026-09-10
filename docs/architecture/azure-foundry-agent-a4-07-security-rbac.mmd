@@ -1,0 +1,77 @@
+%%{init: {"flowchart": {"curve": "linear", "nodeSpacing": 14, "rankSpacing": 20}, "themeVariables": {"fontSize": "11px"}}}%%
+flowchart TB
+  %% Lámina 7 de 8. Seguridad, PII, aprobación y segregación de funciones.
+
+  title["<b>7/8 · Seguridad</b><br/>Identidades, PII y control de acciones"]
+  azure_services["<b>Servicios · arquitectura objetivo</b><br/>Microsoft Entra ID · Microsoft Foundry Agent Service · Azure OpenAI<br/>Azure Storage · Azure Cosmos DB · Azure AI Search · Azure Key Vault<br/>Azure Virtual Network · Azure Private Link · Azure Monitor"]
+
+  airport_agent["Agente de aeropuerto<br/>Rol + estación"]
+  supervisor["Supervisor<br/>Aprobaciones excepcionales"]
+  content_admin["Propietario documental<br/>Publicar y retirar versiones"]
+  entra["Microsoft Entra ID<br/>App roles, grupos y MFA"]
+
+  bff["FastAPI BFF<br/>Autorización y minimización de PII"]
+  agent_id["Hosted Agent<br/>Identidad dedicada"]
+  ingestion_id["Worker de ingesta<br/>Managed Identity"]
+  integration_id["Action Gateway<br/>Identidad por integración"]
+
+  project["Microsoft Foundry Project"]
+  storage[("Azure Storage")]
+  cosmos[("Azure Cosmos DB<br/>Retención limitada")]
+  search[("Azure AI Search")]
+  models["Azure OpenAI"]
+  key_vault["Azure Key Vault"]
+  airline[("Sistemas operacionales<br/>Equipaje · reservas · expedientes")]
+  audit["Azure Monitor<br/>Auditoría de herramientas y aprobación"]
+
+  title --> azure_services
+  azure_services --> airport_agent
+  airport_agent --> entra
+  supervisor --> entra
+  content_admin --> entra
+  entra -->|"Token + claims"| bff
+
+  bff -->|"Invocar caso autorizado"| project
+  project --- agent_id
+  agent_id -. "Search Data Reader" .-> search
+  agent_id -. "OpenAI User" .-> models
+  agent_id -. "Datos mínimos del thread" .-> cosmos
+  agent_id -. "Invocar herramientas read-only" .-> integration_id
+
+  ingestion_id -. "Blob Data Contributor" .-> storage
+  ingestion_id -. "Search Data Contributor" .-> search
+  ingestion_id -. "OpenAI User" .-> models
+  integration_id -. "Credenciales administradas" .-> key_vault
+  integration_id -->|"Scopes por operación"| airline
+  supervisor -->|"Aprobar en UI"| bff
+  bff -->|"Token de aprobación de un solo uso"| integration_id
+
+  bff -.-> audit
+  agent_id -.-> audit
+  integration_id -.-> audit
+
+  network["VNet + Private Endpoints<br/>Private DNS · acceso público deshabilitado"]
+  network -.-> project
+  network -.-> storage
+  network -.-> cosmos
+  network -.-> search
+  network -.-> models
+  network -.-> key_vault
+
+  rule["El modelo nunca decide permisos.<br/>RBAC, ACL, vigencia, aprobación,<br/>retención y enmascarado son deterministas."]
+  rule -.-> bff
+  rule -.-> integration_id
+
+  classDef titleNode fill:#172554,stroke:#172554,color:#ffffff
+  classDef identity fill:#eef2ff,stroke:#4f46e5,stroke-width:2px,color:#312e81
+  classDef resource fill:#e6f7ff,stroke:#0078d4,color:#003b5c
+  classDef networkNode fill:#ecfdf5,stroke:#059669,color:#064e3b
+  classDef note fill:#fff7d6,stroke:#b7791f,color:#5f370e
+  classDef serviceList fill:#e6f7ff,stroke:#0078d4,stroke-width:2px,color:#003b5c
+
+  class title titleNode
+  class azure_services serviceList
+  class airport_agent,supervisor,content_admin,entra,agent_id,ingestion_id,integration_id identity
+  class bff,project,storage,cosmos,search,models,key_vault,airline,audit resource
+  class network networkNode
+  class rule note

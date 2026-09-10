@@ -1,0 +1,59 @@
+%%{init: {"flowchart": {"curve": "linear", "nodeSpacing": 18, "rankSpacing": 24}, "themeVariables": {"fontSize": "12px"}}}%%
+flowchart TB
+  %% Lámina 1 de 8. Resumen del RAG agéntico para incidencias de equipaje.
+
+  title["<b>1/8 · Arquitectura general</b><br/>RAG agéntico para equipaje demorado"]
+  azure_services["<b>Servicios · arquitectura objetivo</b><br/>Microsoft Entra ID · Azure Front Door/WAF · Azure Container Apps<br/>Microsoft Foundry Agent Service · Azure OpenAI · Azure AI Search<br/>Azure Blob Storage · Azure Cosmos DB · Azure Monitor/Application Insights"]
+  user["Agente de aeropuerto<br/>o supervisor"]
+  entra["Microsoft Entra ID<br/>Autenticación, rol y estación"]
+  front_door["Azure Front Door + WAF"]
+  ui["Azure Container Apps<br/>UI · caso, aclaraciones y aprobación"]
+  api["Azure Container Apps<br/>FastAPI · BFF, autorización y PII"]
+  agent["Microsoft Foundry Agent Service<br/>Agente de recuperación de equipaje"]
+  toolbox["Herramientas del agente<br/>RAG · estado · itinerario · rutas"]
+  models["Azure OpenAI<br/>Razonamiento, embeddings y generación"]
+  search[("Azure AI Search<br/>Manuales, SOP y políticas vigentes")]
+  airline[("Sistemas de la aerolínea<br/>Equipaje · reservas · vuelos · expedientes")]
+  state[("Azure Blob Storage + Azure Cosmos DB<br/>Documentos, thread y estado del caso")]
+  monitor["Azure Monitor / Application Insights<br/>Trazas, métricas y auditoría"]
+
+  title --> azure_services
+  azure_services --> user
+  user <-->|"OIDC"| entra
+  user <-->|"Caso, preguntas y aprobación"| front_door
+  front_door <--> ui
+  ui <-->|"Token + solicitud"| api
+  api -->|"Invocar"| agent
+  agent -->|"Seleccionar e invocar"| toolbox
+  toolbox -->|"search_procedures"| search
+  toolbox -->|"Consultas operacionales"| airline
+  search -->|"Evidencia + citas"| toolbox
+  airline -->|"Estado operacional"| toolbox
+  agent <--> models
+  agent <-->|"Memoria del caso"| state
+  agent -->|"Propuesta fundamentada"| api
+  api -->|"Solo tras aprobación humana"| airline
+  agent -. "OpenTelemetry" .-> monitor
+  api -. "Auditoría" .-> monitor
+
+  rule["El modelo investiga y propone.<br/>La API aplica permisos y ejecuta<br/>únicamente acciones aprobadas."]
+  rule -.-> api
+
+  next["Continuar con 2/8:<br/>Runtime, estado y herramientas"]
+  monitor -.-> next
+
+  classDef titleNode fill:#172554,stroke:#172554,color:#ffffff
+  classDef actor fill:#f3f4f6,stroke:#4b5563,color:#111827
+  classDef app fill:#e8f1ff,stroke:#2563eb,stroke-width:2px,color:#172554
+  classDef azure fill:#f3e8ff,stroke:#7e22ce,color:#3b0764
+  classDef data fill:#ecfdf5,stroke:#059669,color:#064e3b
+  classDef note fill:#fff7d6,stroke:#b7791f,color:#5f370e
+  classDef serviceList fill:#e6f7ff,stroke:#0078d4,stroke-width:2px,color:#003b5c
+
+  class title titleNode
+  class azure_services serviceList
+  class user actor
+  class ui,api,agent,toolbox app
+  class entra,front_door,models,monitor azure
+  class search,airline,state data
+  class rule,next note

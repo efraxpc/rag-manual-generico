@@ -27,6 +27,11 @@ container_app_memory       = "1Gi"
 container_app_min_replicas = 0
 container_app_max_replicas = 3
 
+# Generación RAG de FastAPI. Configura ambos valores o conserva ambos en null.
+# El juez se ejecuta en CI y no se configura dentro de la Container App.
+azure_openai_endpoint        = null
+azure_openai_chat_deployment = null
+
 # Azure AI Search. null genera un nombre global estable para la suscripción.
 search_service_name = null
 search_service_sku  = "free"

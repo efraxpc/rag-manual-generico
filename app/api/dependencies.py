@@ -5,8 +5,13 @@ from fastapi import Depends, Request
 
 from app.core.auth import AuthenticatedUser, require_user
 from app.core.exceptions import ApplicationError
-from app.core.resources import open_text_store, open_vector_store
-from app.rag.contracts import TextChunkStore, VectorStore
+from app.core.resources import (
+    open_text_store,
+    open_user_chat_client,
+    open_vector_store,
+)
+from app.rag.contracts import TextChunkStore, TextCompletionClient, VectorStore
+from app.services.answer import AnswerService
 from app.services.file_ingestion import FileIngestionService
 from app.services.ingestion import IngestionService
 from app.services.query import QueryService
@@ -31,6 +36,28 @@ def get_file_ingestion_service(
     store: Annotated[TextChunkStore, Depends(get_text_store)],
 ) -> FileIngestionService:
     return FileIngestionService(store)
+
+
+def get_text_completion_client(
+    request: Request, user: Annotated[AuthenticatedUser, Depends(require_user)]
+) -> Iterator[TextCompletionClient]:
+    with open_user_chat_client(
+        request.app.state.settings, user_assertion=user.assertion
+    ) as client:
+        if client is None:
+            raise ApplicationError(
+                "Configura el endpoint y el despliegue generador de Azure OpenAI.",
+                status_code=503,
+                code="rag_generator_not_configured",
+            )
+        yield client
+
+
+def get_answer_service(
+    store: Annotated[TextChunkStore, Depends(get_text_store)],
+    client: Annotated[TextCompletionClient, Depends(get_text_completion_client)],
+) -> AnswerService:
+    return AnswerService(store, client)
 
 
 def get_vector_store(

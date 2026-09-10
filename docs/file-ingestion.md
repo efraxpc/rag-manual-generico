@@ -54,7 +54,9 @@ Configura primero Entra ID según la guía de autenticación. Después ejecuta
 `./scripts/run_local.sh`, inicia sesión, selecciona un archivo y pulsa **Procesar y
 guardar**. La interfaz muestra el número de fragmentos guardados y las páginas
 omitidas. Las reevaluaciones de Streamlit no vuelven a enviar el archivo.
-El formulario de preguntas todavía prepara la consulta sin generar respuestas.
+Después de una carga correcta, el formulario recupera fragmentos del documento
+por búsqueda textual y genera una respuesta citada con Azure OpenAI. Configura el
+deployment según la [guía de autenticación](entra-auth.md).
 
 También puedes utilizar el endpoint directamente:
 
@@ -74,6 +76,18 @@ Respuesta `200` de ejemplo (el hash y el número dependen del archivo):
   "warnings": ["Página 2 omitida: no contiene texto extraíble; si es una imagen, necesita OCR."]
 }
 ```
+
+Con el `document_id` de esa respuesta también puedes consultar directamente:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/queries/answer \
+  -H 'Authorization: Bearer <token-para-la-api>' \
+  -H 'Content-Type: application/json' \
+  -d '{"question":"¿Qué mantenimiento requiere?","document_id":"<hash>"}'
+```
+
+La respuesta incluye `answer` y los fragmentos de `context` usados. Si no se
+recupera contexto, devuelve una respuesta segura y no llama al modelo generador.
 
 Se admite un archivo por petición de hasta **10 MiB**:
 
@@ -104,8 +118,8 @@ Los errores de aplicación usan `{"error":{"code":"...","message":"...","details
 | 415 | Extensión no admitida. |
 | 422 | Nombre inválido, texto vacío o no UTF-8, PDF dañado, cifrado o sin texto. Un archivo ausente usa la validación estándar de FastAPI. |
 | 401 | Token ausente, caducado, mal firmado o destinado a otra API. |
-| 403 | Falta consentimiento delegado o el usuario no tiene el rol necesario en Search. |
-| 502 | Azure rechazó fragmentos o no devolvió su confirmación; `details.failed_chunks` identifica los fallidos del lote. |
+| 403 | Falta consentimiento delegado o el usuario no tiene el rol necesario en Search o Azure OpenAI. |
+| 502 | Azure rechazó fragmentos, devolvió una respuesta incompatible o el modelo generador falló. |
 | 503 | Almacén textual sin configurar, índice inexistente o fallo de conexión con Azure. |
 
 La indexación usa lotes de hasta 1.000 documentos y un presupuesto conservador

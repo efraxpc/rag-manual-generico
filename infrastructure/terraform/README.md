@@ -9,6 +9,8 @@ recursos:
   `fastapihellowkiksu`.
 - Un servicio Azure AI Search con autenticación Microsoft Entra ID y acceso
   RBAC delegado para un grupo opcional de usuarios.
+- Configuración opcional de un despliegue Azure OpenAI existente para que la API
+  genere respuestas; Terraform no crea ese recurso ni el modelo.
 
 Terraform no administra el Resource Group de Container Apps, el ACR, sus
 imágenes, secretos, claves ni certificados. Ambos recursos se consultan como
@@ -171,6 +173,17 @@ Terraform y a comandos administrativos.
 Terraform configura FastAPI, pero este módulo todavía no despliega la interfaz
 Streamlit. En el hosting del frontend debes definir `.streamlit/secrets.toml` o
 su equivalente seguro y registrar su URI pública de callback.
+
+Para habilitar `POST /api/v1/queries/answer`, configura conjuntamente
+`azure_openai_endpoint` y `azure_openai_chat_deployment`. Los usuarios o grupos
+que consulten necesitan `Cognitive Services OpenAI User` sobre el recurso y el
+registro de FastAPI debe poder solicitar el scope delegado de Azure AI mediante
+OBO. El deployment juez pertenece al entorno de CI, no a la Container App.
+
+El workflow de release publica imágenes con el SHA del commit y actualiza la
+Container App después del quality gate. Terraform ignora solamente los cambios
+en `template.container.image` para no revertir una versión promovida por CI/CD;
+continúa administrando la configuración, identidades, escalado e ingress.
 
 Si configuras `entra_api_client_secret` mediante Terraform, el valor queda
 almacenado en el estado aunque la variable sea sensible. Antes de usarlo en

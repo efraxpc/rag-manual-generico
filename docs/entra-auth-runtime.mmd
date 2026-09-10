@@ -1,0 +1,59 @@
+flowchart TB
+  %% Flujo OIDC y On-Behalf-Of ejecutado para cada usuario y petición.
+  user["1. Usuario abre Streamlit<br/>http://localhost:8501"]
+  entra_login["2. Microsoft Entra ID<br/>autenticación OIDC"]
+  api_token["3. Access token para FastAPI<br/>aud: client ID de API<br/>scp: access_as_user<br/>azp: client ID de Streamlit"]
+  streamlit["4. Streamlit conserva el token<br/>en la sesión OIDC"]
+  fastapi["5. FastAPI recibe<br/>Authorization: Bearer"]
+  validation{"6. Validar firma y expiración<br/>tenant, audiencia, scope y azp"}
+  obo["7. On-Behalf-Of<br/>user_assertion + credencial de FastAPI"]
+  entra_exchange["8. Microsoft Entra ID<br/>intercambia el token"]
+  search_token["9a. Token de Azure AI Search<br/>https://search.azure.com/.default<br/>identidad del mismo usuario"]
+  openai_token["9b. Token de Azure OpenAI<br/>https://ai.azure.com/.default<br/>identidad del mismo usuario"]
+  search_rbac{"10a. Azure RBAC<br/>permiso de datos Search"}
+  openai_rbac{"10b. Azure RBAC<br/>permiso de inferencia OpenAI"}
+  search["11a. Azure AI Search<br/>carga o consulta chunks"]
+  openai["11b. Azure OpenAI<br/>genera la respuesta citada"]
+
+  user --> entra_login
+  entra_login --> api_token
+  api_token --> streamlit
+  streamlit --> fastapi
+  fastapi --> validation
+  validation -->|"Válido"| obo
+  obo --> entra_exchange
+  entra_exchange --> search_token
+  entra_exchange --> openai_token
+  search_token --> search_rbac
+  openai_token --> openai_rbac
+  search_rbac -->|"Search Index Data Contributor"| search
+  openai_rbac -->|"Cognitive Services OpenAI User"| openai
+
+  invalid_token["401<br/>Token ausente, caducado,<br/>mal firmado o de otra API"]
+  forbidden["403<br/>Scope o cliente incorrecto,<br/>sin consentimiento OBO o sin rol"]
+  unavailable["503<br/>Configuración incompleta<br/>o Entra ID no disponible"]
+
+  validation -->|"Token inválido"| invalid_token
+  validation -->|"Scope o azp incorrectos"| forbidden
+  obo -->|"Sin consentimiento"| forbidden
+  search_rbac -->|"Sin rol"| forbidden
+  openai_rbac -->|"Sin rol"| forbidden
+  entra_login -->|"No disponible"| unavailable
+  entra_exchange -->|"No disponible"| unavailable
+
+  no_fallback["Sin fallback a Managed Identity<br/>cada petición conserva la identidad del usuario"]
+  fastapi -.-> no_fallback
+
+  classDef identity fill:#eef2ff,stroke:#4f46e5,color:#312e81
+  classDef token fill:#fff7d6,stroke:#b7791f,color:#5f370e
+  classDef app fill:#e8f1ff,stroke:#2563eb,color:#172554
+  classDef azure fill:#e6f7ff,stroke:#0078d4,color:#003b5c
+  classDef error fill:#fff1f2,stroke:#be123c,color:#881337
+  classDef note fill:#f3f4f6,stroke:#6b7280,color:#111827
+
+  class user,entra_login,entra_exchange identity
+  class api_token,search_token,openai_token,obo token
+  class streamlit,fastapi app
+  class search_rbac,openai_rbac,search,openai azure
+  class invalid_token,forbidden,unavailable error
+  class no_fallback note

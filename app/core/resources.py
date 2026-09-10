@@ -3,26 +3,31 @@
 from collections.abc import Iterator
 from contextlib import contextmanager
 
+import httpx
 from azure.core.exceptions import AzureError, ClientAuthenticationError
 from azure.identity import OnBehalfOfCredential
 from azure.search.documents import SearchClient
 
 from app.core.config import Settings
 from app.core.exceptions import ApplicationError
+from app.integrations.azure_openai_chat import (
+    AZURE_AI_SCOPE,
+    AzureOpenAIChatClient,
+)
 from app.integrations.azure_search import AzureSearchAdapter
 from app.integrations.azure_text_search import AzureTextSearchAdapter
-from app.rag.contracts import TextChunkStore, VectorStore
+from app.rag.contracts import TextChunkStore, TextCompletionClient, VectorStore
 
 SEARCH_SCOPE = "https://search.azure.com/.default"
 
 
 @contextmanager
 def open_user_credential(
-    settings: Settings, assertion: str
+    settings: Settings, assertion: str, *, scope: str = SEARCH_SCOPE
 ) -> Iterator[OnBehalfOfCredential]:
     if not settings.entra_configured or not assertion:
         raise ApplicationError(
-            "Se requiere autenticación delegada para acceder a Search.",
+            "Se requiere autenticación delegada para acceder al recurso Azure.",
             status_code=503,
             code="authentication_not_configured",
         )
@@ -34,21 +39,43 @@ def open_user_credential(
         user_assertion=assertion,
     ) as credential:
         try:
-            credential.get_token(SEARCH_SCOPE)
+            credential.get_token(scope)
         except ClientAuthenticationError:
             raise ApplicationError(
-                "Entra ID no autorizó el acceso delegado a Search. Revisa el "
-                "consentimiento de la aplicación o vuelve a iniciar sesión.",
+                "Entra ID no autorizó el acceso delegado al recurso Azure. Revisa "
+                "el consentimiento de la aplicación o vuelve a iniciar sesión.",
                 status_code=403,
                 code="delegated_authentication_failed",
             ) from None
         except AzureError:
             raise ApplicationError(
-                "No se pudo contactar con Entra ID para acceder a Search.",
+                "No se pudo contactar con Entra ID para acceder al recurso Azure.",
                 status_code=503,
                 code="identity_provider_unavailable",
             ) from None
         yield credential
+
+
+@contextmanager
+def open_user_chat_client(
+    settings: Settings, *, user_assertion: str
+) -> Iterator[TextCompletionClient | None]:
+    if settings.azure_openai_chat_deployment is None:
+        yield None
+        return
+    assert settings.azure_openai_endpoint is not None
+    with (
+        open_user_credential(
+            settings, user_assertion, scope=AZURE_AI_SCOPE
+        ) as credential,
+        httpx.Client(timeout=settings.rag_generation_timeout_seconds) as http_client,
+    ):
+        yield AzureOpenAIChatClient(
+            endpoint=str(settings.azure_openai_endpoint),
+            deployment=settings.azure_openai_chat_deployment,
+            credential=credential,
+            http_client=http_client,
+        )
 
 
 @contextmanager
