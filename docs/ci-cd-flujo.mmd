@@ -1,0 +1,67 @@
+%%{init: {"flowchart": {"curve": "linear", "nodeSpacing": 24, "rankSpacing": 32}, "themeVariables": {"fontSize": "16px"}}}%%
+flowchart TB
+  %% Resumen sencillo del workflow .github/workflows/quality-gate-deploy.yml.
+
+  title["<b>CI/CD del proyecto</b><br/>Validar · evaluar · desplegar"]
+  change["Cambio en GitHub"]
+  event{"¿Cómo se inició?"}
+
+  subgraph ci["1 · Integración continua (CI)"]
+    checks["Instalar Python 3.11 y dependencias<br/><code>pytest</code><br/><code>ruff check .</code><br/><code>ruff format --check .</code>"]
+    checks_ok{"¿Tests y lint pasan?"}
+  end
+
+  failed["Pipeline fallido<br/>No se despliega"]
+  pr_done["Pull request validado<br/>Finaliza sin usar Azure"]
+
+  subgraph quality["2 · Quality gate del RAG (solo push a main o manual)"]
+    eval_login["Entorno GitHub <code>evaluation</code><br/>Login en Azure mediante OIDC"]
+    generate["Generar respuestas candidatas<br/>con el corpus y escenarios versionados"]
+    judge["Evaluar las respuestas<br/>con LLM-as-a-judge · umbral 4"]
+    quality_ok{"¿Todos los casos pasan?"}
+    evidence[("Guardar resultados<br/>como artefacto durante 30 días")]
+  end
+
+  subgraph cd["3 · Despliegue continuo (CD)"]
+    prod_login["Entorno GitHub <code>production</code><br/>Login en Azure mediante OIDC"]
+    build["Azure Container Registry<br/>Construir imagen con tag = commit SHA"]
+    deploy["Azure Container Apps<br/>Actualizar la aplicación con la imagen aprobada"]
+    live["Nueva revisión en producción"]
+  end
+
+  config["<b>Configuración externa necesaria</b><br/>Variables en los entornos evaluation y production<br/>Identidades federadas OIDC y permisos Azure"]
+  concurrency["Un cambio más reciente en la misma rama<br/>cancela la ejecución anterior"]
+
+  title --> change --> event
+  event -->|"Pull request a main"| checks
+  event -->|"Push a main o ejecución manual"| checks
+  checks --> checks_ok
+  checks_ok -->|"No"| failed
+  checks_ok -->|"Sí + pull request"| pr_done
+  checks_ok -->|"Sí + push/manual"| eval_login
+  eval_login --> generate --> judge --> quality_ok
+  judge -. "Siempre" .-> evidence
+  quality_ok -->|"No"| failed
+  quality_ok -->|"Sí"| prod_login --> build --> deploy --> live
+
+  config -.-> eval_login
+  config -.-> prod_login
+  concurrency -.-> change
+
+  classDef titleStyle fill:#172554,stroke:#172554,color:#ffffff
+  classDef sourceStyle fill:#f3f4f6,stroke:#4b5563,color:#111827
+  classDef ciStyle fill:#e8f1ff,stroke:#2563eb,stroke-width:2px,color:#172554
+  classDef decisionStyle fill:#fff7d6,stroke:#b7791f,stroke-width:2px,color:#5f370e
+  classDef qualityStyle fill:#f3e8ff,stroke:#7e22ce,stroke-width:2px,color:#3b0764
+  classDef deployStyle fill:#dcfce7,stroke:#16a34a,stroke-width:2px,color:#14532d
+  classDef failStyle fill:#fee2e2,stroke:#dc2626,stroke-width:3px,color:#7f1d1d
+  classDef noteStyle fill:#e6f7ff,stroke:#0078d4,color:#003b5c
+
+  class title titleStyle
+  class change,pr_done sourceStyle
+  class checks ciStyle
+  class event,checks_ok,quality_ok decisionStyle
+  class eval_login,generate,judge,evidence qualityStyle
+  class prod_login,build,deploy,live deployStyle
+  class failed failStyle
+  class config,concurrency noteStyle

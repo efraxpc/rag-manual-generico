@@ -9,6 +9,12 @@ grande para impresión A4 muestran la ejecución completa:
 3. [Evaluación LLM-as-a-judge](llm-as-a-judge-a4-03-gate.mmd).
 4. [Reporte, bloqueo y despliegue](llm-as-a-judge-a4-04-report.mmd).
 
+La versión conceptual resumida en dos láminas A4 explica la relación entre los
+datos y las métricas:
+
+1. [Dataset y respuesta candidata](llm-as-a-judge-conceptos-a4-01-dataset.mmd).
+2. [Métricas, gate y despliegue](llm-as-a-judge-conceptos-a4-02-metricas.mmd).
+
 Puntúa cada respuesta de 1 a 5 en:
 
 - `groundedness`: respaldo de las afirmaciones en el contexto recuperado.

@@ -1,0 +1,60 @@
+%%{init: {"flowchart": {"curve": "linear", "nodeSpacing": 24, "rankSpacing": 32}, "themeVariables": {"fontSize": "18px"}}}%%
+flowchart TB
+  %% Lámina conceptual 1 de 2. Formato vertical para impresión A4.
+
+  title["<b>Evaluation dataset + LLM-as-a-judge · 1/2</b><br/>Validación, corpus y respuesta candidata"]
+  execution["Ejecución local o pipeline CI/CD"]
+
+  subgraph technical["1. Validación técnica determinista"]
+    pytest["<code>pytest</code><br/>Tests unitarios, API y errores"]
+    ruff["<code>ruff check</code><br/><code>ruff format --check</code>"]
+    technical_gate{"¿Todo pasa?"}
+  end
+
+  stop["Pipeline fallido<br/>No se evalúa ni despliega"]
+
+  subgraph inputs["2. Datos de evaluación fijos y versionados"]
+    scenarios[("<code>rag_scenarios.jsonl</code><br/>Pregunta · respuesta esperada<br/>fuentes · documento · top_k")]
+    corpus[("<code>evaluations/corpus/</code><br/>Manuales controlados<br/><b>No es un corpus aleatorio</b>")]
+  end
+
+  subgraph candidate["3. Ejecutar el RAG de la versión candidata"]
+    seed["Extraer, dividir e indexar el corpus<br/>en Azure AI Search de evaluación"]
+    retrieve["Recuperar el contexto<br/>para cada pregunta"]
+    generator["Azure OpenAI<br/>Deployment generador"]
+    answer["Generar respuesta fundamentada<br/>con citas"]
+    cases[("<code>candidate-answers.jsonl</code><br/>pregunta · respuesta generada · contexto<br/>respuesta esperada · fuentes esperadas")]
+  end
+
+  handoff["<b>Continúa en la lámina 2</b><br/>El juez recibe los casos generados"]
+
+  title --> execution
+  execution --> pytest
+  execution --> ruff
+  pytest --> technical_gate
+  ruff --> technical_gate
+  technical_gate -->|"No"| stop
+  technical_gate -->|"Sí"| scenarios
+  technical_gate -->|"Sí"| corpus
+  scenarios --> seed
+  corpus --> seed
+  seed --> retrieve --> generator --> answer --> cases --> handoff
+  scenarios -. "Añade las expectativas" .-> cases
+
+  classDef titleStyle fill:#172554,stroke:#172554,color:#ffffff
+  classDef actorStyle fill:#f3f4f6,stroke:#4b5563,color:#111827
+  classDef localStyle fill:#e8f1ff,stroke:#2563eb,stroke-width:2px,color:#172554
+  classDef dataStyle fill:#ecfdf5,stroke:#059669,stroke-width:2px,color:#064e3b
+  classDef aiStyle fill:#f3e8ff,stroke:#7e22ce,stroke-width:3px,color:#3b0764
+  classDef decisionStyle fill:#fff7d6,stroke:#b7791f,stroke-width:2px,color:#5f370e
+  classDef failStyle fill:#fee2e2,stroke:#dc2626,stroke-width:3px,color:#7f1d1d
+  classDef handoffStyle fill:#e6f7ff,stroke:#0078d4,stroke-width:3px,color:#003b5c
+
+  class title titleStyle
+  class execution actorStyle
+  class pytest,ruff,seed,retrieve,answer localStyle
+  class scenarios,corpus,cases dataStyle
+  class generator aiStyle
+  class technical_gate decisionStyle
+  class stop failStyle
+  class handoff handoffStyle
