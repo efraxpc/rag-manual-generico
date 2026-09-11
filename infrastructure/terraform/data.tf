@@ -12,3 +12,9 @@ data "azurerm_container_registry" "main" {
   name                = var.container_registry_name
   resource_group_name = data.azurerm_resource_group.container_apps.name
 }
+
+# La cuenta existe previamente; Terraform administra solamente sus deployments.
+data "azurerm_cognitive_account" "openai" {
+  name                = var.azure_openai_account_name
+  resource_group_name = azurerm_resource_group.main.name
+}

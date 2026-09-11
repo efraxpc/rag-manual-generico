@@ -108,20 +108,14 @@ resource "azurerm_container_app" "api" {
         value = azapi_data_plane_resource.text_index.name
       }
 
-      dynamic "env" {
-        for_each = var.azure_openai_endpoint == null ? [] : [1]
-        content {
-          name  = "APP_AZURE_OPENAI_ENDPOINT"
-          value = var.azure_openai_endpoint
-        }
+      env {
+        name  = "APP_AZURE_OPENAI_ENDPOINT"
+        value = data.azurerm_cognitive_account.openai.endpoint
       }
 
-      dynamic "env" {
-        for_each = var.azure_openai_chat_deployment == null ? [] : [1]
-        content {
-          name  = "APP_AZURE_OPENAI_CHAT_DEPLOYMENT"
-          value = var.azure_openai_chat_deployment
-        }
+      env {
+        name  = "APP_AZURE_OPENAI_CHAT_DEPLOYMENT"
+        value = azurerm_cognitive_deployment.general.name
       }
 
       dynamic "env" {
@@ -166,14 +160,6 @@ resource "azurerm_container_app" "api" {
     # Terraform crea la aplicación, pero CI/CD promociona imágenes inmutables con
     # `az containerapp update`; un plan de infraestructura no debe revertir releases.
     ignore_changes = [template[0].container[0].image]
-
-    precondition {
-      condition = (
-        (var.azure_openai_endpoint == null) ==
-        (var.azure_openai_chat_deployment == null)
-      )
-      error_message = "Configura conjuntamente azure_openai_endpoint y azure_openai_chat_deployment."
-    }
 
     precondition {
       condition = (

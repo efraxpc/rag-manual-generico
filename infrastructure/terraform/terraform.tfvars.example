@@ -27,10 +27,13 @@ container_app_memory       = "1Gi"
 container_app_min_replicas = 0
 container_app_max_replicas = 3
 
-# Generación RAG de FastAPI. Configura ambos valores o conserva ambos en null.
-# El juez se ejecuta en CI y no se configura dentro de la Container App.
-azure_openai_endpoint        = null
-azure_openai_chat_deployment = null
+# Cuenta Azure AI Services existente. Terraform crea ambos deployments dentro
+# de ella; null en sus nombres genera valores estables con proyecto y entorno.
+azure_openai_account_name       = "rag-manual-foundry-resource"
+azure_openai_chat_deployment    = null
+azure_openai_judge_deployment   = null
+azure_openai_chat_capacity      = 10
+azure_openai_judge_capacity     = 10
 
 # Azure AI Search. null genera un nombre global estable para la suscripción.
 search_service_name = null

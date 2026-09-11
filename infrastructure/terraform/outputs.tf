@@ -21,6 +21,21 @@ output "resource_group_name" {
   value       = azurerm_resource_group.main.name
 }
 
+output "azure_openai_endpoint" {
+  description = "Endpoint HTTPS de la cuenta Azure AI Services existente."
+  value       = data.azurerm_cognitive_account.openai.endpoint
+}
+
+output "azure_openai_chat_deployment_name" {
+  description = "Nombre del deployment general gpt-5-mini administrado por Terraform."
+  value       = azurerm_cognitive_deployment.general.name
+}
+
+output "azure_openai_judge_deployment_name" {
+  description = "Nombre del deployment juez gpt-5 administrado por Terraform."
+  value       = azurerm_cognitive_deployment.judge.name
+}
+
 output "key_vault_id" {
   description = "ID del Azure Key Vault."
   value       = azurerm_key_vault.main.id

@@ -9,13 +9,13 @@ recursos:
   `fastapihellowkiksu`.
 - Un servicio Azure AI Search con autenticación Microsoft Entra ID y acceso
   RBAC delegado para un grupo opcional de usuarios.
-- Configuración opcional de un despliegue Azure OpenAI existente para que la API
-  genere respuestas; Terraform no crea ese recurso ni el modelo.
+- Dos deployments en una cuenta Azure AI Services existente: `gpt-5-mini` para
+  generar respuestas y `gpt-5` para evaluar la calidad del RAG.
 
 Terraform no administra el Resource Group de Container Apps, el ACR, sus
-imágenes, secretos, claves ni certificados. Ambos recursos se consultan como
-fuentes de datos para evitar asumir propiedad sobre el AKS y los demás recursos
-que comparten ese grupo.
+imágenes, secretos, claves, certificados ni la cuenta Azure AI Services. Los
+recursos existentes se consultan como fuentes de datos; Terraform sí administra
+los dos deployments de modelos dentro de la cuenta.
 
 Los flujos de infraestructura y seguridad están representados en:
 
@@ -35,13 +35,16 @@ preparar el índice y desplegar una imagen que incluya los endpoints vectoriales
 - Una cuenta con acceso a una suscripción de Azure.
 - El proveedor `Microsoft.App` registrado en la suscripción.
 - El proveedor `Microsoft.Search` registrado en la suscripción.
+- El proveedor `Microsoft.CognitiveServices` registrado en la suscripción.
 - Permisos para administrar Resource Groups, Key Vault, Log Analytics,
-  identidades y Container Apps.
+  identidades, Container Apps y deployments de modelos.
 - Rol `Owner` o `User Access Administrator` para crear la asignación RBAC. Si
   los accesos se administran externamente, configura
   `grant_deployer_secrets_access = false`.
 - Un Resource Group y un Azure Container Registry existentes para alojar la
   aplicación y su imagen.
+- La cuenta Azure AI Services `rag-manual-foundry-resource` existente en el
+  Resource Group administrado, con cuota GlobalStandard para los modelos.
 
 ## 1. Autenticarse en Azure
 
@@ -102,6 +105,8 @@ El despliegue crea:
 - Un Azure AI Search, su índice textual y, si se configura
   `search_user_group_object_id`, el rol `Search Index Data Contributor` para
   ese grupo de usuarios.
+- Un deployment general `gpt-5-mini` y un deployment juez `gpt-5`, ambos con
+  versión fija `2025-08-07`, SKU GlobalStandard y capacidad inicial 10.
 
 La imagen debe existir antes de ejecutar `terraform apply`. Puede construirse y
 publicarse mediante ACR Tasks:
@@ -132,6 +137,33 @@ Markdown desde la aplicación, consulta la
 [guía de carga de archivos](../../docs/file-ingestion.md). El comando Python de
 preparación del índice queda disponible para validar entornos existentes. Los
 indexers y skillsets no están implementados.
+
+## Deployments de Azure OpenAI
+
+Terraform consulta la cuenta indicada por `azure_openai_account_name` y
+administra dos deployments dentro de ella. No modifica la configuración de la
+cuenta Azure AI Services.
+
+| Uso | Modelo | Versión | Nombre predeterminado |
+|-----|--------|---------|-----------------------|
+| Generación RAG | `gpt-5-mini` | `2025-08-07` | `rag-manual-generico-dev-general` |
+| Juez de calidad | `gpt-5` | `2025-08-07` | `rag-manual-generico-dev-judge` |
+
+Ambos usan el SKU `GlobalStandard`, capacidad 10 y `NoAutoUpgrade` para que un
+cambio de versión sea explícito y revisable. Los nombres y capacidades pueden
+ajustarse mediante `terraform.tfvars`.
+
+Después de aplicar un plan aprobado, consulta los valores que necesita GitHub:
+
+```bash
+terraform output -raw azure_openai_endpoint
+terraform output -raw azure_openai_chat_deployment_name
+terraform output -raw azure_openai_judge_deployment_name
+```
+
+Configura esos resultados respectivamente como `EVAL_AZURE_OPENAI_ENDPOINT`,
+`EVAL_AZURE_OPENAI_CHAT_DEPLOYMENT` y
+`EVAL_AZURE_OPENAI_JUDGE_DEPLOYMENT` en el entorno `evaluation` de GitHub.
 
 ## Identidades y acceso delegado a Search
 
@@ -174,11 +206,12 @@ Terraform configura FastAPI, pero este módulo todavía no despliega la interfaz
 Streamlit. En el hosting del frontend debes definir `.streamlit/secrets.toml` o
 su equivalente seguro y registrar su URI pública de callback.
 
-Para habilitar `POST /api/v1/queries/answer`, configura conjuntamente
-`azure_openai_endpoint` y `azure_openai_chat_deployment`. Los usuarios o grupos
-que consulten necesitan `Cognitive Services OpenAI User` sobre el recurso y el
-registro de FastAPI debe poder solicitar el scope delegado de Azure AI mediante
-OBO. El deployment juez pertenece al entorno de CI, no a la Container App.
+Terraform configura `POST /api/v1/queries/answer` en la Container App con el
+endpoint de la cuenta existente y el deployment general que administra. Los
+usuarios o grupos que consulten necesitan `Cognitive Services OpenAI User`
+sobre el recurso y el registro de FastAPI debe poder solicitar el scope delegado
+de Azure AI mediante OBO. El deployment juez pertenece al entorno de CI y no se
+configura dentro de la Container App.
 
 El workflow de release publica imágenes con el SHA del commit y actualiza la
 Container App después del quality gate. Terraform ignora solamente los cambios
@@ -261,6 +294,7 @@ infrastructure-architecture.mmd # Vista general de la infraestructura Azure
 key_vault.tf               # Resource Group, Key Vault y RBAC
 key-vault-architecture.mmd # Diagrama Mermaid de la arquitectura
 locals.tf                  # Nombres, protección y etiquetas comunes
+openai.tf                  # Deployments general y juez de Azure OpenAI
 outputs.tf                 # Contexto de Azure y datos del Key Vault
 providers.tf               # Configuración del proveedor AzureRM
 search.tf                  # Azure AI Search y acceso de la aplicación

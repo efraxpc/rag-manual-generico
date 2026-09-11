@@ -166,23 +166,23 @@ variable "container_app_max_replicas" {
   }
 }
 
-variable "azure_openai_endpoint" {
-  description = "Endpoint HTTPS raíz de Azure OpenAI usado por la API para generar respuestas."
+variable "azure_openai_account_name" {
+  description = "Nombre de la cuenta Azure AI Services existente donde Terraform administra los deployments OpenAI."
   type        = string
-  default     = null
-  nullable    = true
+  default     = "rag-manual-foundry-resource"
 
   validation {
     condition = (
-      var.azure_openai_endpoint == null ||
-      can(regex("^https://[^/?#]+/?$", var.azure_openai_endpoint))
+      length(var.azure_openai_account_name) >= 2 &&
+      length(var.azure_openai_account_name) <= 64 &&
+      can(regex("^[0-9A-Za-z](?:[0-9A-Za-z-]*[0-9A-Za-z])?$", var.azure_openai_account_name))
     )
-    error_message = "azure_openai_endpoint debe ser una URL HTTPS raíz, sin ruta ni query."
+    error_message = "azure_openai_account_name debe tener entre 2 y 64 caracteres alfanuméricos o guiones, sin guiones al inicio o al final."
   }
 }
 
 variable "azure_openai_chat_deployment" {
-  description = "Nombre del despliegue de chat usado por el RAG de la API."
+  description = "Nombre opcional del deployment general; null genera un nombre estable con el proyecto y entorno."
   type        = string
   default     = null
   nullable    = true
@@ -193,6 +193,49 @@ variable "azure_openai_chat_deployment" {
       length(trimspace(var.azure_openai_chat_deployment)) > 0
     )
     error_message = "azure_openai_chat_deployment no puede estar vacío."
+  }
+}
+
+variable "azure_openai_judge_deployment" {
+  description = "Nombre opcional del deployment juez; null genera un nombre estable con el proyecto y entorno."
+  type        = string
+  default     = null
+  nullable    = true
+
+  validation {
+    condition = (
+      var.azure_openai_judge_deployment == null ||
+      length(trimspace(var.azure_openai_judge_deployment)) > 0
+    )
+    error_message = "azure_openai_judge_deployment no puede estar vacío."
+  }
+}
+
+variable "azure_openai_chat_capacity" {
+  description = "Capacidad GlobalStandard del deployment general gpt-5-mini."
+  type        = number
+  default     = 10
+
+  validation {
+    condition = (
+      var.azure_openai_chat_capacity >= 1 &&
+      floor(var.azure_openai_chat_capacity) == var.azure_openai_chat_capacity
+    )
+    error_message = "azure_openai_chat_capacity debe ser un entero positivo."
+  }
+}
+
+variable "azure_openai_judge_capacity" {
+  description = "Capacidad GlobalStandard del deployment juez gpt-5."
+  type        = number
+  default     = 10
+
+  validation {
+    condition = (
+      var.azure_openai_judge_capacity >= 1 &&
+      floor(var.azure_openai_judge_capacity) == var.azure_openai_judge_capacity
+    )
+    error_message = "azure_openai_judge_capacity debe ser un entero positivo."
   }
 }
 

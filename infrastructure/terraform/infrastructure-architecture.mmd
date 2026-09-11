@@ -27,6 +27,9 @@ flowchart TB
 
     subgraph vault_rg["rg-rag-manual-generico-dev · brazilsouth<br/>Resource Group administrado por Terraform"]
       vault["<b>Azure Key Vault</b><br/>kv-rag-manu-dev-d6a1d9b7<br/>SKU standard · RBAC · firewall Deny + CIDR autorizados<br/>Soft delete: 7 días · purge protection desactivada en dev"]
+      openai["<b>Azure AI Services</b><br/>rag-manual-foundry-resource<br/>Cuenta existente, consultada como data"]
+      general["<b>Azure OpenAI deployment</b><br/>gpt-5-mini · uso general<br/>GlobalStandard · capacidad 10"]
+      judge["<b>Azure OpenAI deployment</b><br/>gpt-5 · juez de calidad<br/>GlobalStandard · capacidad 10"]
     end
   end
 
@@ -46,14 +49,18 @@ flowchart TB
   deployer -->|"RBAC: Key Vault Secrets Officer · opcional · alcance vault"| vault
 
   api -.->|"Token delegado del usuario · On-Behalf-Of"| search
+  openai --> general
+  openai --> judge
+  api -.->|"Generación RAG"| general
+  github["GitHub Actions<br/>Quality gate"] -.->|"Evaluación"| judge
 
   classDef azureService fill:#e6f7ff,stroke:#0078d4,stroke-width:3px,color:#003b5c
   classDef external fill:#f3f4f6,stroke:#6b7280,color:#111827
   classDef identity fill:#eef2ff,stroke:#4f46e5,stroke-width:2px,color:#312e81
   classDef tooling fill:#f3e8ff,stroke:#7e22ce,color:#3b0764
 
-  class acr,api,logs,search,vault azureService
-  class client,entra_users external
+  class acr,api,logs,search,vault,openai,general,judge azureService
+  class client,entra_users,github external
   class deployer,app_identity,search_identity identity
   class terraform,state tooling
   style environment fill:#eff6ff,stroke:#0078d4,stroke-width:3px,color:#003b5c

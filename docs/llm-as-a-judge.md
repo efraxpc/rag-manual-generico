@@ -52,7 +52,7 @@ identidad que ejecuta el comando necesita el rol `Cognitive Services OpenAI User
 Configura:
 
 ```bash
-APP_AZURE_OPENAI_ENDPOINT="https://<recurso>.openai.azure.com"
+APP_AZURE_OPENAI_ENDPOINT="https://<recurso>.cognitiveservices.azure.com"
 APP_AZURE_OPENAI_CHAT_DEPLOYMENT="<despliegue-generador>"
 APP_AZURE_OPENAI_JUDGE_DEPLOYMENT="<despliegue-del-juez>"
 ```
@@ -160,6 +160,12 @@ variables de GitHub en el entorno correspondiente:
 - Producción: `AZURE_CONTAINER_REGISTRY_NAME`,
   `AZURE_CONTAINER_IMAGE_REPOSITORY`, `AZURE_CONTAINER_APP_RESOURCE_GROUP` y
   `AZURE_CONTAINER_APP_NAME`.
+
+Terraform administra los deployments generador y juez dentro de la cuenta
+Azure AI Services existente. Obtén los valores para las variables de evaluación
+con `terraform output -raw azure_openai_endpoint`,
+`terraform output -raw azure_openai_chat_deployment_name` y
+`terraform output -raw azure_openai_judge_deployment_name`.
 
 La identidad federada de evaluación necesita `Search Index Data Contributor`
 en el índice exclusivo y `Cognitive Services OpenAI User` en Azure OpenAI. La
