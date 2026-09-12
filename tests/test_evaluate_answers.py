@@ -149,6 +149,7 @@ def test_main_uses_report_as_ci_quality_gate(
     monkeypatch: pytest.MonkeyPatch,
     passed: bool,
     expected_exit: int,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     dataset = tmp_path / "cases.jsonl"
     output = tmp_path / "report.json"
@@ -177,6 +178,12 @@ def test_main_uses_report_as_ci_quality_gate(
     exit_code = command.main([str(dataset), "--output", str(output)])
 
     assert exit_code == expected_exit
+    log = capsys.readouterr().err
+    assert f"Quality gate: {int(passed)}/1 casos aprobados" in log
+    if not passed:
+        assert "Caso rechazado case-1" in log
+        assert "groundedness=3/5" in log
+    assert "Razón comprobable" not in log
     assert json.loads(output.read_text(encoding="utf-8"))["summary"]["failed"] == (
         0 if passed else 1
     )

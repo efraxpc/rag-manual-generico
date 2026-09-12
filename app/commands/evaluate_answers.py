@@ -167,6 +167,23 @@ def main(argv: list[str] | None = None) -> int:
             threshold=args.threshold,
         )
         write_report(report, args.output)
+        print(
+            f"Quality gate: {report.summary.passed}/{report.summary.total} casos "
+            f"aprobados; umbral {report.threshold}/5.",
+            file=sys.stderr,
+        )
+        for result in report.results:
+            if not result.passed:
+                scores = ", ".join(
+                    f"{name}={getattr(result.assessment, name).score}/5"
+                    for name in METRIC_NAMES
+                )
+                print(
+                    f"Caso rechazado {result.case_id}: {scores}; "
+                    "afirmaciones sin respaldo="
+                    f"{len(result.assessment.unsupported_claims)}.",
+                    file=sys.stderr,
+                )
     except (DatasetError, InvalidJudgeResponseError, JudgeProviderError) as exc:
         print(str(exc), file=sys.stderr)
         return 2

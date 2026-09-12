@@ -33,6 +33,13 @@ datos derivados del contenido y el reporte debe tratarse como información sensi
 El gate no evalúa respuestas estáticas. Primero ejecuta el código RAG de la
 versión candidata sobre preguntas versionadas y un corpus controlado:
 
+Tras cargar el corpus, el generador comprueba que todos sus fragmentos sean
+consultables en Search, con un límite de espera de 60 segundos. Si no están
+disponibles, termina con código 2 antes de generar respuestas. Esta comprobación
+usa una consulta `*` por documento; las preguntas siguen usando la recuperación
+normal del RAG. El evaluador muestra en el log el resumen y las puntuaciones de
+los casos rechazados, y conserva el detalle en `judge-report.json`.
+
 ```text
 tests + lint
     → sembrar corpus de evaluación en Azure AI Search

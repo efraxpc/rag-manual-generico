@@ -3,10 +3,12 @@
 import argparse
 import json
 import sys
+import time
 from collections.abc import Mapping
 from pathlib import Path
 
 import httpx
+from azure.core.exceptions import AzureError
 from azure.identity import DefaultAzureCredential
 from azure.search.documents import SearchClient
 from pydantic import ValidationError
@@ -108,7 +110,49 @@ def generate_cases(
     return cases
 
 
-def seed_documents(path: Path, store: TextChunkStore) -> dict[str, str]:
+def wait_for_documents(
+    client: SearchClient,
+    expected_chunks: Mapping[str, int],
+    *,
+    timeout_seconds: float = 60,
+) -> None:
+    """Esperar visibilidad del corpus antes de medir la recuperación candidata."""
+    pending = dict(expected_chunks)
+    deadline = time.monotonic() + timeout_seconds
+    while pending:
+        for document_id, count in list(pending.items()):
+            escaped_id = document_id.replace("'", "''")
+            try:
+                results = client.search(
+                    search_text="*",
+                    filter=f"document_id eq '{escaped_id}'",
+                    select=["id"],
+                )
+                visible = len({result["id"] for result in results})
+            except AzureError as exc:
+                raise ScenarioDatasetError(
+                    "No se pudo comprobar la disponibilidad del corpus en Search."
+                ) from exc
+            if visible >= count:
+                del pending[document_id]
+        if not pending:
+            return
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise ScenarioDatasetError(
+                "El corpus no está completamente disponible en Search "
+                f"tras {timeout_seconds:g} segundos; documentos pendientes: "
+                f"{len(pending)}."
+            )
+        time.sleep(min(2, remaining))
+
+
+def seed_documents(
+    path: Path,
+    store: TextChunkStore,
+    *,
+    search_client: SearchClient | None = None,
+) -> dict[str, str]:
     try:
         documents = sorted(
             candidate
@@ -126,6 +170,7 @@ def seed_documents(path: Path, store: TextChunkStore) -> dict[str, str]:
 
     ingestion = FileIngestionService(store)
     document_ids: dict[str, str] = {}
+    expected_chunks: dict[str, int] = {}
     for document in documents:
         try:
             with document.open("rb") as file:
@@ -135,6 +180,9 @@ def seed_documents(path: Path, store: TextChunkStore) -> dict[str, str]:
                 f"No se pudo leer el documento de evaluación: {document.name}."
             ) from exc
         document_ids[result.source] = result.document_id
+        expected_chunks[result.document_id] = result.indexed_chunks
+    if search_client is not None:
+        wait_for_documents(search_client, expected_chunks)
     return document_ids
 
 
@@ -218,7 +266,7 @@ def main(argv: list[str] | None = None) -> int:
                 ),
             )
             document_ids = (
-                seed_documents(args.documents_dir, store)
+                seed_documents(args.documents_dir, store, search_client=search_client)
                 if args.documents_dir is not None
                 else None
             )

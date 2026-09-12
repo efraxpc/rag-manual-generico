@@ -3,6 +3,7 @@ from pathlib import Path
 from unittest.mock import Mock
 
 import pytest
+from azure.core.exceptions import HttpResponseError
 
 from app.commands import generate_evaluation_answers as command
 from app.commands.generate_evaluation_answers import (
@@ -123,6 +124,61 @@ def test_preserves_empty_context_as_quality_signal() -> None:
     case = generate_cases([EvaluationScenario.model_validate(scenario())], service)[0]
 
     assert case.context == []
+
+
+def test_waits_for_all_chunks_before_finishing_corpus_upload(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "manual.md").write_text("Texto del manual.", encoding="utf-8")
+    client = Mock()
+    client.search.side_effect = [[], [{"id": "chunk-1"}]]
+    sleep = Mock()
+    monkeypatch.setattr(command.time, "sleep", sleep)
+
+    ids = seed_documents(tmp_path, Mock(), search_client=client)
+
+    assert client.search.call_count == 2
+    assert client.search.call_args.kwargs["filter"] == (
+        f"document_id eq '{ids['manual.md']}'"
+    )
+    assert client.search.call_args.kwargs["search_text"] == "*"
+    sleep.assert_called_once()
+
+
+def test_waits_for_partial_document_and_does_not_recheck_ready_documents(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = Mock()
+    client.search.side_effect = [
+        [{"id": "a1"}],
+        [{"id": "b1"}],
+        [{"id": "a1"}, {"id": "a2"}],
+    ]
+    monkeypatch.setattr(command.time, "sleep", Mock())
+
+    command.wait_for_documents(client, {"a": 2, "b": 1})
+
+    assert [call.kwargs["filter"] for call in client.search.call_args_list] == [
+        "document_id eq 'a'",
+        "document_id eq 'b'",
+        "document_id eq 'a'",
+    ]
+
+
+def test_visibility_timeout_fails_instead_of_evaluating_empty_context() -> None:
+    client = Mock()
+    client.search.return_value = []
+
+    with pytest.raises(ScenarioDatasetError, match="documentos pendientes: 1"):
+        command.wait_for_documents(client, {"manual": 1}, timeout_seconds=0)
+
+
+def test_visibility_check_reports_search_failure() -> None:
+    client = Mock()
+    client.search.side_effect = HttpResponseError("Forbidden", status_code=403)
+
+    with pytest.raises(ScenarioDatasetError, match="disponibilidad del corpus"):
+        command.wait_for_documents(client, {"manual": 1})
 
 
 def test_main_rejects_missing_candidate_configuration_before_azure(
