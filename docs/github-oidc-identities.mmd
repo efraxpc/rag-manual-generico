@@ -1,0 +1,38 @@
+%%{init: {"flowchart": {"curve": "linear"}, "themeVariables": {"fontSize": "16px"}}}%%
+flowchart LR
+  github["GitHub Actions<br/>pide un acceso temporal"]
+
+  subgraph evaluation["Entorno evaluation"]
+    eval_identity["Identidad de evaluación<br/>solo puede evaluar"]
+    search["Azure AI Search<br/>lee y prepara datos de prueba"]
+    openai["Azure OpenAI<br/>genera y califica respuestas"]
+  end
+
+  subgraph production["Entorno production"]
+    prod_identity["Identidad de producción<br/>solo puede desplegar"]
+    acr["Azure Container Registry<br/>construye la imagen"]
+    app["Azure Container App<br/>publica la nueva versión"]
+  end
+
+  github -->|"Token OIDC sin contraseña"| eval_identity
+  github -->|"Token OIDC sin contraseña"| prod_identity
+  eval_identity -->|"Permiso limitado"| search
+  eval_identity -->|"Permiso limitado"| openai
+  prod_identity -->|"Permiso limitado"| acr
+  prod_identity -->|"Permiso limitado"| app
+
+  separation["Las identidades están separadas:<br/>evaluar no permite desplegar<br/>y desplegar no permite evaluar"]
+  eval_identity -.-> separation
+  prod_identity -.-> separation
+
+  classDef githubStyle fill:#24292f,stroke:#24292f,color:#ffffff
+  classDef evalStyle fill:#f3e8ff,stroke:#7e22ce,color:#3b0764
+  classDef prodStyle fill:#dcfce7,stroke:#16a34a,color:#14532d
+  classDef azureStyle fill:#e6f7ff,stroke:#0078d4,color:#003b5c
+  classDef noteStyle fill:#fff7d6,stroke:#b7791f,color:#5f370e
+
+  class github githubStyle
+  class eval_identity evalStyle
+  class prod_identity prodStyle
+  class search,openai,acr,app azureStyle
+  class separation noteStyle

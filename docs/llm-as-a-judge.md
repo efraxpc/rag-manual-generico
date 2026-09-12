@@ -167,10 +167,19 @@ con `terraform output -raw azure_openai_endpoint`,
 `terraform output -raw azure_openai_chat_deployment_name` y
 `terraform output -raw azure_openai_judge_deployment_name`.
 
-La identidad federada de evaluación necesita `Search Index Data Contributor`
-en el índice exclusivo y `Cognitive Services OpenAI User` en Azure OpenAI. La
-identidad de producción necesita permisos para ejecutar ACR Build y actualizar
-la Container App. Limita cada identidad a su entorno y recursos respectivos.
+Terraform crea dos identidades administradas con credenciales federadas OIDC,
+una restringida al entorno `evaluation` y otra a `production`. También asigna
+los roles necesarios: evaluación puede usar Search y Azure OpenAI; producción
+puede ejecutar ACR Build y actualizar la Container App. Configura como
+`AZURE_CLIENT_ID` de cada entorno el output correspondiente:
+
+```bash
+terraform output -raw github_evaluation_identity_client_id
+terraform output -raw github_production_identity_client_id
+```
+
+El flujo resumido está en
+[`github-oidc-identities.mmd`](github-oidc-identities.mmd).
 
 El despliegue usa una etiqueta inmutable igual al SHA del commit. Terraform
 ignora cambios posteriores en la imagen de la Container App para no revertir la

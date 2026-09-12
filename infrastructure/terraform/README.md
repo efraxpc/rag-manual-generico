@@ -11,6 +11,8 @@ recursos:
   RBAC delegado para un grupo opcional de usuarios.
 - Dos deployments en una cuenta Azure AI Services existente: `gpt-5-mini` para
   generar respuestas y `gpt-5` para evaluar la calidad del RAG.
+- Dos identidades administradas con confianza OIDC para GitHub Actions: una
+  limitada a evaluación y otra limitada al despliegue en producción.
 
 Terraform no administra el Resource Group de Container Apps, el ACR, sus
 imágenes, secretos, claves, certificados ni la cuenta Azure AI Services. Los
@@ -23,6 +25,8 @@ Los flujos de infraestructura y seguridad están representados en:
   general de los grupos de recursos, servicios, identidades y permisos RBAC.
 - [`key-vault-architecture.mmd`](key-vault-architecture.mmd).
 - [`azure-ai-search-entra-rbac.mmd`](azure-ai-search-entra-rbac.mmd).
+- [`../../docs/github-oidc-identities.mmd`](../../docs/github-oidc-identities.mmd):
+  explicación sencilla de las dos identidades usadas por GitHub Actions.
 
 La vista general refleja la configuración Terraform del entorno `dev`. La
 conexión RAG punteada requiere configurar las variables `APP_AZURE_SEARCH_*`,
@@ -45,6 +49,8 @@ preparar el índice y desplegar una imagen que incluya los endpoints vectoriales
   aplicación y su imagen.
 - La cuenta Azure AI Services `rag-manual-foundry-resource` existente en el
   Resource Group administrado, con cuota GlobalStandard para los modelos.
+- El nombre exacto del repositorio de GitHub configurado en
+  `github_repository`, con formato `propietario/repositorio`.
 
 ## 1. Autenticarse en Azure
 
@@ -164,6 +170,30 @@ terraform output -raw azure_openai_judge_deployment_name
 Configura esos resultados respectivamente como `EVAL_AZURE_OPENAI_ENDPOINT`,
 `EVAL_AZURE_OPENAI_CHAT_DEPLOYMENT` y
 `EVAL_AZURE_OPENAI_JUDGE_DEPLOYMENT` en el entorno `evaluation` de GitHub.
+
+## Identidades OIDC de GitHub Actions
+
+Terraform crea identidades administradas separadas para los entornos protegidos
+`evaluation` y `production`. Cada credencial acepta tokens solamente del
+repositorio indicado por `github_repository` y del entorno correspondiente. No
+se almacenan secretos de cliente.
+
+La identidad de evaluación recibe `Search Index Data Contributor` sobre Azure
+AI Search y `Cognitive Services OpenAI User` sobre la cuenta Azure AI Services.
+La identidad de producción recibe `Container Registry Tasks Contributor` sobre
+el ACR y `Container Apps Contributor` sobre la aplicación.
+
+Después de aplicar un plan aprobado, obtén los Client ID:
+
+```bash
+terraform output -raw github_evaluation_identity_client_id
+terraform output -raw github_production_identity_client_id
+```
+
+Configura el primer resultado como `AZURE_CLIENT_ID` en el entorno GitHub
+`evaluation` y el segundo como `AZURE_CLIENT_ID` en `production`. Ambos entornos
+pueden compartir `AZURE_TENANT_ID` y `AZURE_SUBSCRIPTION_ID`. Terraform no crea
+los entornos ni sus variables dentro de GitHub.
 
 ## Identidades y acceso delegado a Search
 
@@ -295,6 +325,7 @@ key_vault.tf               # Resource Group, Key Vault y RBAC
 key-vault-architecture.mmd # Diagrama Mermaid de la arquitectura
 locals.tf                  # Nombres, protección y etiquetas comunes
 openai.tf                  # Deployments general y juez de Azure OpenAI
+github_oidc.tf             # Identidades OIDC y permisos de GitHub Actions
 outputs.tf                 # Contexto de Azure y datos del Key Vault
 providers.tf               # Configuración del proveedor AzureRM
 search.tf                  # Azure AI Search y acceso de la aplicación

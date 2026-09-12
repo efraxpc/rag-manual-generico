@@ -44,6 +44,17 @@ variable "location" {
   default     = "brazilsouth"
 }
 
+variable "github_repository" {
+  description = "Repositorio de GitHub autorizado para solicitar tokens OIDC, con formato propietario/repositorio."
+  type        = string
+  default     = "efraxpc/rag-manual-generico"
+
+  validation {
+    condition     = can(regex("^[0-9A-Za-z_.-]+/[0-9A-Za-z_.-]+$", var.github_repository))
+    error_message = "github_repository debe usar el formato propietario/repositorio."
+  }
+}
+
 variable "key_vault_sku_name" {
   description = "SKU de Azure Key Vault. Usa premium solo si necesitas claves protegidas por HSM."
   type        = string

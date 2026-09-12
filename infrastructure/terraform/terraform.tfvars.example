@@ -7,6 +7,9 @@ project_name = "rag-manual-generico"
 environment  = "dev"
 location     = "brazilsouth"
 
+# Repositorio exacto autorizado para autenticarse en Azure desde GitHub Actions.
+github_repository = "efraxpc/rag-manual-generico"
+
 key_vault_sku_name            = "standard"
 grant_deployer_secrets_access = true
 

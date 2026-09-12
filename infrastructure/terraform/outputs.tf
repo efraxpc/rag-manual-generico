@@ -21,6 +21,16 @@ output "resource_group_name" {
   value       = azurerm_resource_group.main.name
 }
 
+output "github_evaluation_identity_client_id" {
+  description = "Client ID que se configura como AZURE_CLIENT_ID en el entorno evaluation de GitHub."
+  value       = azurerm_user_assigned_identity.github_evaluation.client_id
+}
+
+output "github_production_identity_client_id" {
+  description = "Client ID que se configura como AZURE_CLIENT_ID en el entorno production de GitHub."
+  value       = azurerm_user_assigned_identity.github_production.client_id
+}
+
 output "azure_openai_endpoint" {
   description = "Endpoint HTTPS de la cuenta Azure AI Services existente."
   value       = data.azurerm_cognitive_account.openai.endpoint
