@@ -55,6 +55,26 @@ variable "github_repository" {
   }
 }
 
+variable "github_repository_ids" {
+  description = "IDs inmutables del propietario y repositorio incluidos en el subject OIDC de GitHub."
+  type = object({
+    owner      = string
+    repository = string
+  })
+  default = {
+    owner      = "2850073"
+    repository = "1356528895"
+  }
+
+  validation {
+    condition = alltrue([
+      for id in [var.github_repository_ids.owner, var.github_repository_ids.repository] :
+      can(regex("^[0-9]+$", id))
+    ])
+    error_message = "Los IDs de GitHub deben contener únicamente dígitos."
+  }
+}
+
 variable "key_vault_sku_name" {
   description = "SKU de Azure Key Vault. Usa premium solo si necesitas claves protegidas por HSM."
   type        = string

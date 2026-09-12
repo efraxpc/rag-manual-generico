@@ -1,6 +1,10 @@
 # GitHub Actions obtiene tokens temporales mediante OIDC. Cada entorno usa una
 # identidad distinta para que evaluación no pueda desplegar y producción no
 # pueda consultar los datos usados por el quality gate.
+locals {
+  github_oidc_subject_prefix = "repo:${split("/", var.github_repository)[0]}@${var.github_repository_ids.owner}/${split("/", var.github_repository)[1]}@${var.github_repository_ids.repository}"
+}
+
 resource "azurerm_user_assigned_identity" "github_evaluation" {
   name                = "id-${local.resource_prefix}-github-eval"
   location            = azurerm_resource_group.main.location
@@ -13,7 +17,7 @@ resource "azurerm_federated_identity_credential" "github_evaluation" {
   user_assigned_identity_id = azurerm_user_assigned_identity.github_evaluation.id
   audience                  = ["api://AzureADTokenExchange"]
   issuer                    = "https://token.actions.githubusercontent.com"
-  subject                   = "repo:${var.github_repository}:environment:evaluation"
+  subject                   = "${local.github_oidc_subject_prefix}:environment:evaluation"
 }
 
 resource "azurerm_role_assignment" "github_evaluation_search_data" {
@@ -44,7 +48,7 @@ resource "azurerm_federated_identity_credential" "github_production" {
   user_assigned_identity_id = azurerm_user_assigned_identity.github_production.id
   audience                  = ["api://AzureADTokenExchange"]
   issuer                    = "https://token.actions.githubusercontent.com"
-  subject                   = "repo:${var.github_repository}:environment:production"
+  subject                   = "${local.github_oidc_subject_prefix}:environment:production"
 }
 
 resource "azurerm_role_assignment" "github_production_acr_build" {

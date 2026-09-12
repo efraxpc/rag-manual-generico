@@ -178,6 +178,16 @@ Terraform crea identidades administradas separadas para los entornos protegidos
 repositorio indicado por `github_repository` y del entorno correspondiente. No
 se almacenan secretos de cliente.
 
+Las credenciales usan el subject inmutable de GitHub:
+`repo:OWNER@OWNER_ID/REPO@REPO_ID:environment:ENTORNO`. Configura
+`github_repository` y `github_repository_ids` con los nombres e IDs del
+repositorio. Comprueba el prefijo real con
+`gh api repos/OWNER/REPO/actions/oidc/customization/sub` y los IDs con
+`gh api repos/OWNER/REPO --jq '{owner: .owner.id, repository: .id}'`.
+El subject debe coincidir exactamente con el token emitido; el formato anterior
+sin IDs provoca `AADSTS700213` cuando GitHub usa subjects inmutables.
+Consulta la [referencia OIDC de GitHub](https://docs.github.com/en/actions/reference/security/oidc).
+
 La identidad de evaluación recibe `Search Index Data Contributor` sobre Azure
 AI Search y `Cognitive Services OpenAI User` sobre la cuenta Azure AI Services.
 La identidad de producción recibe `Container Registry Tasks Contributor` sobre
