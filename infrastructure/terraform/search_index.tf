@@ -6,12 +6,8 @@ resource "azurerm_role_assignment" "search_index_admin" {
   principal_id         = data.azurerm_client_config.current.object_id
 }
 
-resource "azapi_data_plane_resource" "text_index" {
-  type      = "Microsoft.Search/searchServices/indexes@2024-07-01"
-  parent_id = "${azurerm_search_service.main.name}.search.windows.net"
-  name      = "rag-text-chunks"
-
-  body = {
+locals {
+  text_index_body = {
     fields = [
       for field in [
         "id", "chunk_id", "document_id", "content", "source", "page"
@@ -25,6 +21,22 @@ resource "azapi_data_plane_resource" "text_index" {
       }
     ]
   }
+}
+
+resource "azapi_data_plane_resource" "text_index" {
+  type      = "Microsoft.Search/searchServices/indexes@2024-07-01"
+  parent_id = "${azurerm_search_service.main.name}.search.windows.net"
+  name      = "rag-text-chunks"
+  body      = local.text_index_body
+
+  depends_on = [azurerm_role_assignment.search_index_admin]
+}
+
+resource "azapi_data_plane_resource" "evaluation_index" {
+  type      = "Microsoft.Search/searchServices/indexes@2024-07-01"
+  parent_id = "${azurerm_search_service.main.name}.search.windows.net"
+  name      = "rag-evaluation-chunks"
+  body      = local.text_index_body
 
   depends_on = [azurerm_role_assignment.search_index_admin]
 }

@@ -64,6 +64,12 @@ APP_AZURE_SEARCH_ENDPOINT="https://<servicio>.search.windows.net"
 APP_AZURE_SEARCH_TEXT_INDEX_NAME="rag-evaluation-chunks"
 ```
 
+Terraform administra `rag-evaluation-chunks` con el mismo esquema que el índice
+textual de la aplicación. Obtén su nombre con
+`terraform output -raw search_evaluation_index_name` desde
+`infrastructure/terraform` y úsalo como `EVAL_AZURE_SEARCH_TEXT_INDEX_NAME` en
+el entorno `evaluation` de GitHub.
+
 Para ejecución local, `DefaultAzureCredential` puede usar la sesión de Azure CLI.
 En Azure usa la identidad administrada; si es asignada por el usuario, configura
 `APP_AZURE_MANAGED_IDENTITY_CLIENT_ID`. Conviene que el juez sea un despliegue

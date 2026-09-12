@@ -110,3 +110,8 @@ output "search_service_endpoint" {
   description = "Endpoint HTTPS de Azure AI Search."
   value       = azurerm_search_service.main.endpoint
 }
+
+output "search_evaluation_index_name" {
+  description = "Índice exclusivo de CI; configura EVAL_AZURE_SEARCH_TEXT_INDEX_NAME con este valor."
+  value       = azapi_data_plane_resource.evaluation_index.name
+}
