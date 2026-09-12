@@ -2,12 +2,12 @@ locals {
   entra_auth_values = [
     var.entra_tenant_id,
     var.entra_api_client_id,
-    var.entra_api_client_secret,
     var.entra_frontend_client_id,
   ]
-  entra_auth_enabled = nonsensitive(alltrue([
+  entra_auth_enabled = alltrue([
     for value in local.entra_auth_values : value != null
-  ]))
+  ]) && (var.create_entra_api_client_secret || nonsensitive(var.entra_api_client_secret != null))
+  entra_api_client_secret = var.create_entra_api_client_secret ? azuread_application_password.container_app[0].value : var.entra_api_client_secret
 
   normalized_project_name = trim(
     replace(

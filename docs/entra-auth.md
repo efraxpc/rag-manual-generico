@@ -41,7 +41,13 @@ un client secret. Guárdalo fuera de Git; en producción debe llegar mediante un
 almacén de secretos y no como un valor versionado.
 
 Los registros de aplicación de Entra no se crean en este repositorio. Terraform
-recibe sus IDs y el secreto para configurar FastAPI. Si pasas el secreto con
+recibe sus IDs y el secreto para configurar FastAPI. También puedes activar
+`create_entra_api_client_secret = true` para crear una credencial adicional en el
+registro existente de FastAPI mediante el proveedor AzureAD. No proporciones
+`entra_api_client_secret` al usar esta opción. Terraform conecta la credencial
+al secreto `entra-api-client-secret` de Container Apps, referenciado por
+`APP_ENTRA_API_CLIENT_SECRET`, y conserva el valor sensible en su estado.
+Si pasas el secreto con
 `TF_VAR_entra_api_client_secret`, recuerda que Terraform lo guarda en el estado:
 usa un backend remoto cifrado y restringido antes de un despliegue de producción.
 

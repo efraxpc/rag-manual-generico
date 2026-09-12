@@ -340,6 +340,12 @@ variable "entra_api_client_secret" {
   sensitive   = true
 }
 
+variable "create_entra_api_client_secret" {
+  description = "Crear una credencial adicional en el registro existente de FastAPI para Container Apps. Su valor sensible queda en el estado de Terraform."
+  type        = bool
+  default     = false
+}
+
 variable "entra_frontend_client_id" {
   description = "Client ID del registro de aplicación de Streamlit autorizado para llamar a FastAPI."
   type        = string

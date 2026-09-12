@@ -50,7 +50,7 @@ resource "azurerm_container_app" "api" {
     for_each = local.entra_auth_enabled ? [1] : []
     content {
       name  = "entra-api-client-secret"
-      value = var.entra_api_client_secret
+      value = local.entra_api_client_secret
     }
   }
 
@@ -163,10 +163,12 @@ resource "azurerm_container_app" "api" {
 
     precondition {
       condition = (
-        alltrue([for value in local.entra_auth_values : value == null]) ||
+        (alltrue([for value in local.entra_auth_values : value == null]) &&
+          !var.create_entra_api_client_secret &&
+        nonsensitive(var.entra_api_client_secret == null)) ||
         local.entra_auth_enabled
       )
-      error_message = "Configura conjuntamente entra_tenant_id, entra_api_client_id, entra_api_client_secret y entra_frontend_client_id."
+      error_message = "Configura los tres IDs de Entra y proporciona entra_api_client_secret o activa create_entra_api_client_secret."
     }
 
     precondition {
